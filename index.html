@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cotangent Unified Command Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-bg"></div>
+    <main class="dashboard-shell">
+      <header class="topbar glass">
+        <div class="brand">
+          <span class="brand-dot"></span>
+          <div>
+            <p class="brand-title">Cotangent</p>
+            <p class="brand-sub">Unified Command Center</p>
+          </div>
+        </div>
+
+        <div class="status-strip">
+          <div>
+            <span class="label">City Health</span>
+            <strong class="good" id="cityHealth">94.2%</strong>
+          </div>
+          <div>
+            <span class="label">Active Threats</span>
+            <strong class="warning" id="activeThreats">3</strong>
+          </div>
+          <div>
+            <span class="label">Grid Load</span>
+            <strong class="hot" id="gridLoad">82%</strong>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="pill neutral">Admin</button>
+          <button class="pill safe">Secure Link</button>
+          <button class="pill ghost">Disconnect</button>
+        </div>
+      </header>
+
+      <section class="advisory glass">
+        <p class="tag">Intelligence AI Tactics Analysis</p>
+        <p id="advisoryText">
+          Tactical advisory: high volume of active incidents (3). Recommend recalling
+          off-duty response personnel and engaging automated routing optimization.
+        </p>
+      </section>
+
+      <section class="simulator glass warm">
+        <div>
+          <h2>Cotangent Simulation Engine</h2>
+          <p>Run manual stress tests and inject threat vectors to verify dashboard response.</p>
+        </div>
+        <div class="sim-buttons">
+          <button id="injectBtn" class="btn alert">Inject Cyber Attack</button>
+          <button id="incidentBtn" class="btn caution">Trigger Physical Incident</button>
+        </div>
+      </section>
+
+      <section class="grid-top">
+        <article class="panel glass chart-panel">
+          <div class="panel-head">
+            <h3>Live Attack Telemetry</h3>
+            <button id="lockdownBtn" class="btn tiny danger">Initiate Lockdown</button>
+          </div>
+          <canvas id="telemetryChart" width="900" height="260" aria-label="Telemetry graph"></canvas>
+          <div class="chart-legend">
+            <span><i class="dot req"></i>Requests</span>
+            <span><i class="dot thr"></i>Threats</span>
+          </div>
+        </article>
+
+        <article class="panel glass logs-panel">
+          <div class="panel-head">
+            <h3>API Firewall Logs</h3>
+            <span class="pulse">Live</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Origin</th>
+                <th>IP</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="logRows"></tbody>
+          </table>
+        </article>
+
+        <article class="panel glass intercept-panel">
+          <div class="panel-head">
+            <h3>Dark Web Intercept</h3>
+          </div>
+          <pre id="interceptFeed"></pre>
+        </article>
+      </section>
+
+      <section class="grid-bottom">
+        <article class="panel glass utilization">
+          <div class="panel-head">
+            <h3>Live Asset Utilization</h3>
+          </div>
+          <div id="assetBars" class="asset-bars"></div>
+        </article>
+
+        <article class="panel glass routing">
+          <div class="panel-head">
+            <h3>Smart Response Routing</h3>
+            <div class="route-actions">
+              <button class="btn tiny">Optimize Route</button>
+              <button class="btn tiny alert">Active</button>
+            </div>
+          </div>
+          <div class="routing-body">
+            <div class="map" id="mapNodes"></div>
+            <div class="incidents" id="incidentCards"></div>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>

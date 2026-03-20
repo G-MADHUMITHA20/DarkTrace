@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "PhishShield - Real-time Phishing Detection",
+  "version": "2.0.0",
+  "description": "Real-time phishing detection for URLs and emails using AI-powered analysis",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://*/",
+    "http://localhost:4000/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "PhishShield - Check for Phishing"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "cotangent-backend",
+  "private": true,
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "sqlite3": "^5.1.6",
+    "axios": "^1.6.2",
+    "whois-json": "^2.0.0",
+    "mailparser": "^3.7.2",
+    "natural": "^8.1.0"
+  }
+}
