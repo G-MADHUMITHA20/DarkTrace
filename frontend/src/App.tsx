@@ -124,6 +124,7 @@ function App() {
     localStorage.removeItem("token");
     setUser(null);
     setShowProfile(false);
+    navigate("/login", { replace: true });
   };
 
   const fetchState = async () => {

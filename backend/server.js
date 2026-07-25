@@ -890,6 +890,114 @@ app.post("/api/logout", (req, res) => {
   });
 });
 
+// ==================== PROFILE UPDATE API ====================
+app.put("/api/profile", async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
+    // Get user ID from session token
+    db.get(`SELECT u.id FROM sessions s JOIN users u ON s.userId = u.id WHERE s.token = ?`, [token], (err, row) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!row) return res.status(401).json({ error: "Invalid session" });
+      const userId = row.id;
+      const { name, currentPassword, newPassword } = req.body;
+      // Update name if provided
+      if (name) {
+        db.run(`UPDATE users SET name = ? WHERE id = ?`, [name, userId], (err) => {
+          if (err) console.error(err);
+        });
+      }
+      // Update password if newPassword provided
+      if (newPassword) {
+        db.get(`SELECT passwordHash FROM users WHERE id = ?`, [userId], (err, userRow) => {
+          if (err) return res.status(500).json({ error: err.message });
+          if (!userRow) return res.status(404).json({ error: "User not found" });
+          if (!verifyPassword(currentPassword || "", userRow.passwordHash)) {
+            return res.status(401).json({ error: "Invalid current password" });
+          }
+          const passwordHash = hashPassword(newPassword);
+          db.run(`UPDATE users SET passwordHash = ? WHERE id = ?`, [passwordHash, userId], (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            return res.json({ message: "Profile updated" });
+          });
+        });
+        return; // response handled inside callback
+      }
+      return res.json({ message: "Profile updated" });
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== HISTORY DELETE API ====================
+app.delete("/api/history/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    db.run(`DELETE FROM scan_results WHERE id = ?`, [id], function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (this.changes === 0) return res.status(404).json({ error: "Record not found" });
+      res.json({ message: "Record deleted" });
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== PROFILE UPDATE API ====================
+app.put("/api/profile", async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
+    // Get user ID from session token
+    db.get(`SELECT u.id FROM sessions s JOIN users u ON s.userId = u.id WHERE s.token = ?`, [token], (err, row) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!row) return res.status(401).json({ error: "Invalid session" });
+      const userId = row.id;
+      const { name, currentPassword, newPassword } = req.body;
+      // Update name if provided
+      if (name) {
+        db.run(`UPDATE users SET name = ? WHERE id = ?`, [name, userId], (err) => {
+          if (err) console.error(err);
+        });
+      }
+      // Update password if newPassword provided
+      if (newPassword) {
+        db.get(`SELECT passwordHash FROM users WHERE id = ?`, [userId], (err, userRow) => {
+          if (err) return res.status(500).json({ error: err.message });
+          if (!userRow) return res.status(404).json({ error: "User not found" });
+          if (!verifyPassword(currentPassword || "", userRow.passwordHash)) {
+            return res.status(401).json({ error: "Invalid current password" });
+          }
+          const passwordHash = hashPassword(newPassword);
+          db.run(`UPDATE users SET passwordHash = ? WHERE id = ?`, [passwordHash, userId], (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            return res.json({ message: "Profile updated" });
+          });
+        });
+        return; // response handled inside callback
+      }
+      return res.json({ message: "Profile updated" });
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== HISTORY DELETE API ====================
+app.delete("/api/history/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    db.run(`DELETE FROM scan_results WHERE id = ?`, [id], function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (this.changes === 0) return res.status(404).json({ error: "Record not found" });
+      res.json({ message: "Record deleted" });
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`📡 DarkTrace API running on port ${PORT}`);
   console.log(`📊 Features: URL Detection | Email Detection | WHOIS Lookup | Threat Intelligence | ML Scoring | AI Explanation | Persistent Storage`);
