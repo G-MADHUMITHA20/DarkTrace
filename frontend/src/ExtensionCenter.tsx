@@ -1,17 +1,21 @@
 const EXTENSION_FEATURES = [
-  "Analyze active browser URL from popup",
-  "Analyze pasted email/message content",
-  "Highlight suspicious links on loaded pages",
-  "Background service worker for scan actions",
-  "Connected to PhishShield API on localhost:4000",
+  "🔍 Analyze active browser URL from popup",
+  "📧 Analyze pasted email/message content",
+  "🚨 Warning popup for phishing sites with risk score & explanation",
+  "↩️ Go Back button to exit dangerous pages instantly",
+  "🔗 Highlight suspicious links on loaded pages",
+  "🤖 ML classifier with confidence scoring",
+  "⚡ Background service worker for real-time scan actions",
+  "📡 Connected to DarkTrace API on localhost:4000",
 ];
 
 const INSTALL_STEPS = [
   "Open Chrome and go to chrome://extensions",
-  "Enable Developer mode",
-  "Click Load unpacked",
+  "Enable Developer mode (top-right toggle)",
+  "Click 'Load unpacked'",
   "Select the browser-extension folder from the project root",
-  "Pin PhishShield extension and start scanning from the popup",
+  "Pin DarkTrace extension to toolbar",
+  "Click the extension icon on any page to start scanning",
 ];
 
 export default function ExtensionCenter() {
@@ -21,8 +25,8 @@ export default function ExtensionCenter() {
         <p className="eyebrow">Browser Security Module</p>
         <h2>Extension Center</h2>
         <p className="subcopy">
-          The extension is already implemented and connected to your backend. This section helps you install,
-          verify, and demo it during project review.
+          The DarkTrace extension is fully implemented and connected to the backend API. It provides real-time phishing 
+          detection with warning popups, risk scores, AI explanations, and a Go Back button for immediate protection.
         </p>
       </header>
 

@@ -1,19 +1,35 @@
-// Service Worker for PhishShield Extension
+// Service Worker for DarkTrace Extension
 
 // Listen for installation
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
-    console.log('PhishShield extension installed!');
+    console.log('DarkTrace extension installed!');
   }
 });
 
-// Listen for messages from content script
+// Listen for messages from popup or content script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'analyze') {
     analyzeContent(request.content, request.kind)
       .then(result => sendResponse({ success: true, result }))
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true; // Keep channel open for async response
+  }
+
+  if (request.action === 'goBack') {
+    // Navigate the active tab back
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) {
+        chrome.tabs.goBack(tabs[0].id, () => {
+          if (chrome.runtime.lastError) {
+            // Fallback: navigate to new tab page if can't go back
+            chrome.tabs.update(tabs[0].id, { url: 'chrome://newtab/' });
+          }
+        });
+      }
+    });
+    sendResponse({ success: true });
+    return true;
   }
 });
 

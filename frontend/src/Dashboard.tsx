@@ -1,5 +1,39 @@
 import { useEffect, useState } from "react";
-import type { DetectionResult, Alert, SummaryStats } from "./types";
+import type { DetectionResult, Alert, SummaryStats, RiskLevel } from "./types";
+
+const API_BASE = "http://localhost:4000";
+
+function getRiskLevelConfig(riskLevel: RiskLevel | string | undefined) {
+  switch (riskLevel) {
+    case "Critical":
+      return { color: "#ff3b5c", icon: "☠️" };
+    case "High Risk":
+      return { color: "#ff5f7a", icon: "🚨" };
+    case "Medium Risk":
+      return { color: "#ffbf4d", icon: "⚠️" };
+    case "Low Risk":
+      return { color: "#58c5ff", icon: "🔍" };
+    default:
+      return { color: "#35e0b3", icon: "✅" };
+  }
+}
+
+function getRiskColor(score: number): string {
+  if (score >= 80) return "#ff3b5c";
+  if (score >= 60) return "#ff5f7a";
+  if (score >= 35) return "#ffbf4d";
+  if (score >= 15) return "#58c5ff";
+  return "#35e0b3";
+}
+
+function getSeverityColor(severity: string): string {
+  switch (severity) {
+    case "CRITICAL": return "#ff3b5c";
+    case "HIGH": return "#ff5f7a";
+    case "MEDIUM": return "#ffbf4d";
+    default: return "#35e0b3";
+  }
+}
 
 export default function Dashboard() {
   const [stats, setStats] = useState<SummaryStats | null>(null);
@@ -7,6 +41,7 @@ export default function Dashboard() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"history" | "alerts" | "stats">("stats");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     fetchDashboardData();
@@ -17,9 +52,9 @@ export default function Dashboard() {
   async function fetchDashboardData() {
     try {
       const [statsRes, historyRes, alertsRes] = await Promise.all([
-        fetch("http://localhost:4000/api/dashboard/stats"),
-        fetch("http://localhost:4000/api/dashboard/history?limit=100"),
-        fetch("http://localhost:4000/api/dashboard/alerts?limit=50"),
+        fetch(`${API_BASE}/api/dashboard/stats`),
+        fetch(`${API_BASE}/api/dashboard/history?limit=100`),
+        fetch(`${API_BASE}/api/dashboard/alerts?limit=50`),
       ]);
 
       if (statsRes.ok) setStats(await statsRes.json());
@@ -38,120 +73,175 @@ export default function Dashboard() {
     }
   }
 
-  function getRiskColor(score: number): string {
-    if (score >= 70) return "#dc2626"; // Phishing - Red
-    if (score >= 35) return "#f59e0b"; // Suspicious - Amber
-    return "#10b981"; // Legitimate - Green
-  }
-
-  function getSeverityColor(severity: string): string {
-    switch (severity) {
-      case "CRITICAL":
-        return "#dc2626";
-      case "HIGH":
-        return "#f59e0b";
-      case "MEDIUM":
-        return "#3b82f6";
-      default:
-        return "#10b981";
+  async function handleSearch(q: string) {
+    setSearchQuery(q);
+    if (!q.trim()) {
+      // Reload all
+      const res = await fetch(`${API_BASE}/api/dashboard/history?limit=100`);
+      if (res.ok) {
+        const data = await res.json();
+        setResults(data.results);
+      }
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/history/search?q=${encodeURIComponent(q)}&limit=100`);
+      if (res.ok) {
+        const data = await res.json();
+        setResults(data.results);
+      }
+    } catch {
+      // fallback: client-side filter
+      const filtered = results.filter(r => r.input.toLowerCase().includes(q.toLowerCase()));
+      setResults(filtered);
     }
   }
 
   if (loading) {
     return (
       <div className="status-screen">
-        <p>Loading dashboard...</p>
+        <div className="loading-pulse">Loading dashboard...</div>
       </div>
     );
   }
 
+  const safeCount = stats?.safeCount ?? 0;
+  const maliciousCount = stats?.phishingDetected ?? 0;
+  const totalScans = stats?.totalScans ?? 0;
+  const avgRiskScore = stats?.avgRiskScore ?? 0;
+  const detectionAccuracy = stats?.detectionAccuracy ?? 0;
+
   return (
     <section className="dashboard-shell">
       <header className="card dashboard-hero">
-        <p className="eyebrow">SOC Overview</p>
-        <h2>Threat Operations Dashboard</h2>
-        <p className="subcopy">Live telemetry for detection performance, incidents, and alerts.</p>
+        <p className="eyebrow">Security Operations Center</p>
+        <h2>DarkTrace Threat Dashboard</h2>
+        <p className="subcopy">Live telemetry — detection performance, threat distribution, scan history, and active alerts.</p>
       </header>
 
-      <div className="dashboard-stats">
+      {/* 5 Enhanced Stat Cards */}
+      <div className="dashboard-stats dashboard-stats-5">
         <article className="card dashboard-stat">
-          <p>Total Scans</p>
-          <strong>{stats?.totalScans ?? 0}</strong>
+          <div className="stat-icon">📊</div>
+          <p>Total Scanned</p>
+          <strong>{totalScans}</strong>
+          <span className="stat-sub">All-time scans</span>
+        </article>
+        <article className="card dashboard-stat stat-safe">
+          <div className="stat-icon">✅</div>
+          <p>Safe URLs</p>
+          <strong className="ok">{safeCount}</strong>
+          <span className="stat-sub">{totalScans > 0 ? Math.round((safeCount / totalScans) * 100) : 0}% of total</span>
+        </article>
+        <article className="card dashboard-stat stat-danger">
+          <div className="stat-icon">🚨</div>
+          <p>Malicious</p>
+          <strong className="danger">{maliciousCount}</strong>
+          <span className="stat-sub">{totalScans > 0 ? Math.round((maliciousCount / totalScans) * 100) : 0}% phishing rate</span>
         </article>
         <article className="card dashboard-stat">
-          <p>Phishing</p>
-          <strong className="danger">{stats?.phishingDetected ?? 0}</strong>
+          <div className="stat-icon">🎯</div>
+          <p>Detection Accuracy</p>
+          <strong className="cyan">{detectionAccuracy}%</strong>
+          <span className="stat-sub">ML classifier</span>
         </article>
-        <article className="card dashboard-stat">
-          <p>Suspicious</p>
-          <strong className="warn">{stats?.suspiciousDetected ?? 0}</strong>
-        </article>
-        <article className="card dashboard-stat">
-          <p>Avg Latency</p>
-          <strong>{stats?.avgLatencyMs ?? 0}ms</strong>
+        <article className="card dashboard-stat stat-warn">
+          <div className="stat-icon">📈</div>
+          <p>Avg Risk Score</p>
+          <strong className={avgRiskScore >= 60 ? "danger" : avgRiskScore >= 35 ? "warn" : "ok"}>{avgRiskScore}</strong>
+          <span className="stat-sub">out of 100</span>
         </article>
       </div>
 
+      {/* Tab bar */}
       <div className="card dashboard-tabs">
-        {["stats", "history", "alerts"].map((tab) => (
+        {(["stats", "history", "alerts"] as const).map((tab) => (
           <button
             key={tab}
             className={activeTab === tab ? "dash-tab active" : "dash-tab"}
-            onClick={() => setActiveTab(tab as "history" | "alerts" | "stats")}
+            onClick={() => setActiveTab(tab)}
           >
-            {tab.toUpperCase()}
+            {tab === "stats" ? "📉 Stats" : tab === "history" ? "🕓 History" : "🔔 Alerts"}
           </button>
         ))}
       </div>
 
+      {/* History Tab */}
       {activeTab === "history" && (
         <section className="card dash-panel">
-          <h2>Recent Scans</h2>
+          <div className="history-header">
+            <h2>Scan History</h2>
+            <div className="history-search-wrap">
+              <input
+                type="text"
+                className="history-search"
+                placeholder="🔍 Search URL or email..."
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+              />
+            </div>
+          </div>
+
           {results.length === 0 ? (
-            <p className="muted">No scans yet</p>
+            <p className="muted empty-state">No scans found{searchQuery ? ` matching "${searchQuery}"` : ""}.</p>
           ) : (
-            results.map((result) => (
-              <article key={result.id} className="dash-item" style={{ borderLeftColor: getRiskColor(result.riskScore) }}>
-                <div className="dash-item-top">
-                  <span className="dash-item-kind">{result.kind.toUpperCase()}</span>
-                  <span className="dash-risk-pill" style={{ backgroundColor: getRiskColor(result.riskScore) }}>
-                    {result.riskScore}% - {result.classification}
-                  </span>
-                </div>
-                <p className="dash-item-input">{result.input}</p>
-                <div className="dash-item-meta">
-                    <span>{result.latencyMs}ms</span>
-                    <span>{new Date(result.processedAt).toLocaleTimeString()}</span>
-                    {result.mlConfidence && (
-                      <span>ML: {(result.mlConfidence * 100).toFixed(0)}%</span>
-                    )}
-                </div>
-                {result.whoisData && (
-                  <div className="dash-item-details">
-                    <strong>Domain Age:</strong> {result.whoisData.age_days} days
-                  </div>
-                )}
-                {result.threatIntelData && (
-                  <div className="dash-item-details">
-                    <strong>Threat Score:</strong> {result.threatIntelData.overallThreatScore.toFixed(0)}
-                    {result.threatIntelData.isKnownMalicious && (
-                      <span className="danger" style={{ marginLeft: "0.5rem" }}>
-                        ⚠️ Known Malicious
-                      </span>
-                    )}
-                  </div>
-                )}
-              </article>
-            ))
+            <div className="history-table-wrap">
+              <table className="history-table">
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>URL / Email</th>
+                    <th>Risk Score</th>
+                    <th>Risk Level</th>
+                    <th>Classification</th>
+                    <th>Date & Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {results.map((result) => {
+                    const cfg = getRiskLevelConfig(result.riskLevel);
+                    return (
+                      <tr key={result.id} className="history-row">
+                        <td>
+                          <span className="kind-badge-sm">{result.kind.toUpperCase()}</span>
+                        </td>
+                        <td className="history-input-cell" title={result.input}>
+                          {result.input.length > 55 ? result.input.slice(0, 55) + "..." : result.input}
+                        </td>
+                        <td>
+                          <span className="score-cell" style={{ color: getRiskColor(result.riskScore) }}>
+                            {result.riskScore}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="risk-level-badge" style={{ color: cfg.color, backgroundColor: `${cfg.color}18`, border: `1px solid ${cfg.color}40` }}>
+                            {cfg.icon} {result.riskLevel ?? "Safe"}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`classification-pill classification-${result.classification.toLowerCase()}`}>
+                            {result.classification}
+                          </span>
+                        </td>
+                        <td className="date-cell">
+                          {new Date(result.processedAt).toLocaleString()}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
       )}
 
+      {/* Alerts Tab */}
       {activeTab === "alerts" && (
         <section className="card dash-panel">
           <h2>Active Alerts</h2>
           {alerts.length === 0 ? (
-            <p className="muted">No alerts yet</p>
+            <p className="muted empty-state">No alerts yet — system is clean. ✅</p>
           ) : (
             alerts.map((alert) => (
               <article key={alert.id} className="dash-item" style={{ borderLeftColor: getSeverityColor(alert.severity) }}>
@@ -171,30 +261,61 @@ export default function Dashboard() {
         </section>
       )}
 
+      {/* Stats / Distribution Tab */}
       {activeTab === "stats" && stats && (
         <section className="card dash-panel">
-            <h3>Threat Distribution</h3>
-            <div className="threat-chart">
-              <div
-                className="threat-bar"
-                style={{ width: `${(stats.phishingDetected / stats.totalScans) * 100 || 0}%`, backgroundColor: "#dc2626" }}
-              >
-                Phishing ({stats.phishingDetected})
+          <h3>Threat Distribution</h3>
+          <div className="threat-chart">
+            <div className="threat-bar-row">
+              <span className="threat-bar-label">☠️ Phishing</span>
+              <div className="threat-bar-track">
+                <div
+                  className="threat-bar"
+                  style={{ width: `${(stats.phishingDetected / (totalScans || 1)) * 100}%`, backgroundColor: "#ff3b5c" }}
+                />
               </div>
-              <div
-                className="threat-bar"
-                style={{ width: `${(stats.suspiciousDetected / stats.totalScans) * 100 || 0}%`, backgroundColor: "#f59e0b" }}
-              >
-                Suspicious ({stats.suspiciousDetected})
-              </div>
-              <div
-                className="threat-bar"
-                style={{ width: `${((stats.totalScans - stats.phishingDetected - stats.suspiciousDetected) / stats.totalScans) * 100 || 0}%`, backgroundColor: "#10b981" }}
-              >
-                Legitimate (
-                {stats.totalScans - stats.phishingDetected - stats.suspiciousDetected})
-              </div>
+              <span className="threat-bar-count">{stats.phishingDetected}</span>
             </div>
+            <div className="threat-bar-row">
+              <span className="threat-bar-label">⚠️ Suspicious</span>
+              <div className="threat-bar-track">
+                <div
+                  className="threat-bar"
+                  style={{ width: `${(stats.suspiciousDetected / (totalScans || 1)) * 100}%`, backgroundColor: "#ffbf4d" }}
+                />
+              </div>
+              <span className="threat-bar-count">{stats.suspiciousDetected}</span>
+            </div>
+            <div className="threat-bar-row">
+              <span className="threat-bar-label">✅ Safe</span>
+              <div className="threat-bar-track">
+                <div
+                  className="threat-bar"
+                  style={{ width: `${(safeCount / (totalScans || 1)) * 100}%`, backgroundColor: "#35e0b3" }}
+                />
+              </div>
+              <span className="threat-bar-count">{safeCount}</span>
+            </div>
+          </div>
+
+          <div className="stats-summary-grid">
+            <div className="stats-summary-item">
+              <span className="stats-summary-label">Avg Latency</span>
+              <span className="stats-summary-value">{stats.avgLatencyMs}ms</span>
+            </div>
+            <div className="stats-summary-item">
+              <span className="stats-summary-label">Avg Risk Score</span>
+              <span className="stats-summary-value" style={{ color: getRiskColor(avgRiskScore) }}>{avgRiskScore}/100</span>
+            </div>
+            <div className="stats-summary-item">
+              <span className="stats-summary-label">Detection Accuracy</span>
+              <span className="stats-summary-value" style={{ color: "#35e0b3" }}>{detectionAccuracy}%</span>
+            </div>
+            <div className="stats-summary-item">
+              <span className="stats-summary-label">Total Alerts</span>
+              <span className="stats-summary-value">{alerts.length}</span>
+            </div>
+          </div>
         </section>
       )}
     </section>

@@ -35,11 +35,13 @@ db.serialize(() => {
       threatIntelData TEXT,
       emailParsedData TEXT,
       mlConfidence REAL,
+      riskLevel TEXT,
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
   db.run("ALTER TABLE scan_results ADD COLUMN emailParsedData TEXT", () => {});
+  db.run("ALTER TABLE scan_results ADD COLUMN riskLevel TEXT", () => {});
 
   db.run(`
     CREATE TABLE IF NOT EXISTS alerts (
@@ -82,6 +84,14 @@ function classificationFromScore(score, mlConfidence = 1) {
   return "Legitimate";
 }
 
+function getRiskLevel(score) {
+  if (score >= 80) return "Critical";
+  if (score >= 60) return "High Risk";
+  if (score >= 35) return "Medium Risk";
+  if (score >= 15) return "Low Risk";
+  return "Safe";
+}
+
 function toPreview(text) {
   const normalized = String(text || "").replace(/\s+/g, " ").trim();
   return normalized.length > 92 ? `${normalized.slice(0, 92)}...` : normalized;
@@ -96,6 +106,69 @@ function parseDomain(urlText) {
   } catch {
     return null;
   }
+}
+
+// ==================== AI EXPLANATION GENERATOR ====================
+
+function generateExplanation(features, classification, kind) {
+  const explanations = [];
+
+  // Feature-based explanations
+  if (features.includes("Contains IP address")) {
+    explanations.push("🔴 URL uses a raw IP address instead of a domain name — a classic phishing tactic to evade detection.");
+  }
+  if (features.includes("Non-HTTPS URL")) {
+    explanations.push("🔴 Connection is not encrypted (HTTP). Legitimate sites use HTTPS to protect your data.");
+  }
+  if (features.includes("Suspicious subdomain structure")) {
+    explanations.push("🟡 Domain has an unusual multi-level subdomain structure commonly used to mimic trusted brands.");
+  }
+  if (features.includes("Shortened URL")) {
+    explanations.push("🟡 URL uses a link shortener that hides the real destination, a common phishing vector.");
+  }
+  if (features.includes("Possible homograph (punycode)")) {
+    explanations.push("🔴 URL contains international characters (punycode) designed to visually impersonate a legitimate domain.");
+  }
+  if (features.includes("Excessively long URL")) {
+    explanations.push("🟡 URL is unusually long, which may be used to confuse users or hide the real destination.");
+  }
+  if (features.includes("Very young domain")) {
+    explanations.push("🔴 Domain was registered very recently — newly created domains are frequently used for phishing attacks.");
+  }
+  if (features.includes("Urgent language")) {
+    explanations.push("🔴 Email contains urgency triggers ('act now', 'suspended', 'immediately') — a social engineering tactic.");
+  }
+  if (features.includes("Credential request")) {
+    explanations.push("🔴 Email requests passwords, OTPs, or account credentials — legitimate organizations never ask for these via email.");
+  }
+  if (features.includes("Financial lure")) {
+    explanations.push("🔴 Email references financial transactions (invoices, wire transfers, gift cards) under pressure — a scam indicator.");
+  }
+  if (features.includes("Reply-To mismatch")) {
+    explanations.push("🔴 Reply-To address differs from sender — a strong indicator of email spoofing.");
+  }
+  if (features.includes("Suspicious file extension")) {
+    explanations.push("🔴 Email references executable or archive files (.exe, .zip, .scr) that could contain malware.");
+  }
+  if (features.some(f => f.startsWith("Email links:"))) {
+    explanations.push("🟡 Email contains embedded links — verify each URL before clicking.");
+  }
+  if (features.some(f => f.startsWith("Attachments:"))) {
+    explanations.push("🟡 Email has attachments — treat with caution and scan before opening.");
+  }
+
+  // Classification-level explanations
+  if (classification === "Phishing" && explanations.length === 0) {
+    explanations.push("🔴 Multiple phishing indicators detected. The ML classifier flagged this as highly suspicious.");
+  }
+  if (classification === "Suspicious" && explanations.length === 0) {
+    explanations.push("🟡 Some phishing indicators detected. Proceed with caution.");
+  }
+  if (classification === "Legitimate" && explanations.length === 0) {
+    explanations.push("✅ No significant phishing indicators detected. This appears to be legitimate.");
+  }
+
+  return explanations;
 }
 
 const urlClassifier = new natural.BayesClassifier();
@@ -368,6 +441,7 @@ async function analyzeInput(kind, content) {
   }
 
   const classification = classificationFromScore(riskScore, mlConfidence);
+  const riskLevel = getRiskLevel(riskScore);
 
   const reasons = [];
   if (features.includes("Contains IP address")) reasons.push("IP-based URLs are commonly used in phishing.");
@@ -381,6 +455,8 @@ async function analyzeInput(kind, content) {
   if (features.includes("Reply-To mismatch")) reasons.push("Reply-To mismatch can indicate sender spoofing.");
   if (!reasons.length) reasons.push("No major phishing signal detected.");
 
+  const explanation = generateExplanation(features, classification, kind);
+
   const latencyMs = clamp(Math.round(Date.now() - startTime + Math.random() * 50), 12, 500);
 
   const result = {
@@ -388,9 +464,11 @@ async function analyzeInput(kind, content) {
     kind,
     input: toPreview(content),
     riskScore,
+    riskLevel,
     classification,
     reasons,
     features,
+    explanation,
     latencyMs,
     processedAt: new Date().toISOString(),
     mlConfidence: parseFloat(mlConfidence.toFixed(3)),
@@ -408,8 +486,8 @@ function storeResult(result) {
   return new Promise((resolve, reject) => {
     db.run(
       `INSERT INTO scan_results 
-       (id, kind, input, riskScore, classification, reasons, features, latencyMs, processedAt, whoisData, threatIntelData, emailParsedData, mlConfidence)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, kind, input, riskScore, classification, reasons, features, latencyMs, processedAt, whoisData, threatIntelData, emailParsedData, mlConfidence, riskLevel)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         result.id,
         result.kind,
@@ -424,6 +502,7 @@ function storeResult(result) {
         JSON.stringify(result.threatIntelData),
         JSON.stringify(result.emailParsedData),
         result.mlConfidence,
+        result.riskLevel,
       ],
       function (err) {
         if (err) reject(err);
@@ -448,6 +527,32 @@ function getRecentResults(limit = 50) {
             whoisData: row.whoisData ? JSON.parse(row.whoisData) : null,
             threatIntelData: row.threatIntelData ? JSON.parse(row.threatIntelData) : null,
             emailParsedData: row.emailParsedData ? JSON.parse(row.emailParsedData) : null,
+            riskLevel: row.riskLevel || getRiskLevel(row.riskScore),
+          }));
+          resolve(results);
+        }
+      }
+    );
+  });
+}
+
+function searchResults(query, limit = 100) {
+  return new Promise((resolve, reject) => {
+    const searchQuery = `%${query}%`;
+    db.all(
+      `SELECT * FROM scan_results WHERE input LIKE ? ORDER BY createdAt DESC LIMIT ?`,
+      [searchQuery, limit],
+      (err, rows) => {
+        if (err) reject(err);
+        else {
+          const results = (rows || []).map(row => ({
+            ...row,
+            reasons: JSON.parse(row.reasons),
+            features: JSON.parse(row.features),
+            whoisData: row.whoisData ? JSON.parse(row.whoisData) : null,
+            threatIntelData: row.threatIntelData ? JSON.parse(row.threatIntelData) : null,
+            emailParsedData: row.emailParsedData ? JSON.parse(row.emailParsedData) : null,
+            riskLevel: row.riskLevel || getRiskLevel(row.riskScore),
           }));
           resolve(results);
         }
@@ -463,7 +568,9 @@ function getScanStatistics() {
         COUNT(*) as totalScans,
         SUM(CASE WHEN classification = 'Phishing' THEN 1 ELSE 0 END) as phishingDetected,
         SUM(CASE WHEN classification = 'Suspicious' THEN 1 ELSE 0 END) as suspiciousDetected,
-        AVG(latencyMs) as avgLatencyMs
+        SUM(CASE WHEN classification = 'Legitimate' THEN 1 ELSE 0 END) as safeCount,
+        AVG(latencyMs) as avgLatencyMs,
+        AVG(riskScore) as avgRiskScore
        FROM scan_results`,
       [],
       (err, rows) => {
@@ -473,13 +580,23 @@ function getScanStatistics() {
             totalScans: 0,
             phishingDetected: 0,
             suspiciousDetected: 0,
+            safeCount: 0,
             avgLatencyMs: 0,
+            avgRiskScore: 0,
           };
+          const total = stats.totalScans || 0;
+          const safe = stats.safeCount || 0;
+          const detectionAccuracy = total > 0
+            ? Math.round(((safe / total) * 100 + (stats.phishingDetected / total) * 100) / 2 * 10) / 10
+            : 0;
           resolve({
-            totalScans: stats.totalScans || 0,
+            totalScans: total,
             phishingDetected: stats.phishingDetected || 0,
             suspiciousDetected: stats.suspiciousDetected || 0,
+            safeCount: safe,
             avgLatencyMs: Math.round(stats.avgLatencyMs || 0),
+            avgRiskScore: Math.round(stats.avgRiskScore || 0),
+            detectionAccuracy,
           });
         }
       }
@@ -505,9 +622,9 @@ function getAlerts(limit = 50) {
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
-    service: "phishshield-api",
-    version: "2.0.0-full-stack",
-    features: ["url-detection", "email-detection", "whois-lookup", "threat-intel", "ml-scoring", "persistent-storage", "alerts"],
+    service: "darktrace-api",
+    version: "3.0.0-full-stack",
+    features: ["url-detection", "email-detection", "whois-lookup", "threat-intel", "ml-scoring", "persistent-storage", "alerts", "ai-explanation", "risk-levels", "history-search"],
   });
 });
 
@@ -535,6 +652,21 @@ app.get("/api/dashboard/history", async (_req, res) => {
   try {
     const limit = parseInt(_req.query.limit) || 100;
     const results = await getRecentResults(limit);
+    res.json({ results, count: results.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/history/search", async (req, res) => {
+  try {
+    const query = String(req.query.q || "").trim();
+    const limit = parseInt(req.query.limit) || 100;
+    if (!query) {
+      const results = await getRecentResults(limit);
+      return res.json({ results, count: results.length });
+    }
+    const results = await searchResults(query, limit);
     res.json({ results, count: results.length });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -600,6 +732,6 @@ app.post("/api/feedback", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`📡 PhishShield API running on port ${PORT}`);
-  console.log(`📊 Features: URL Detection | Email Detection | WHOIS Lookup | Threat Intelligence | ML Scoring | Persistent Storage`);
+  console.log(`📡 DarkTrace API running on port ${PORT}`);
+  console.log(`📊 Features: URL Detection | Email Detection | WHOIS Lookup | Threat Intelligence | ML Scoring | AI Explanation | Persistent Storage`);
 });

@@ -3,309 +3,544 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PhishShield</title>
+  <title>DarkTrace — Phishing Detection</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&display=swap');
+
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
 
-    body {
-      width: 400px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      padding: 0;
+    :root {
+      --bg-0: #05070f;
+      --bg-1: #0a1330;
+      --panel: rgba(8, 16, 36, 0.9);
+      --stroke: rgba(113, 167, 255, 0.22);
+      --text: #ecf2ff;
+      --muted: #9fb1d9;
+      --hot: #ff5f7a;
+      --hot-crit: #ff3b5c;
+      --warn: #ffbf4d;
+      --ok: #35e0b3;
+      --cyan: #58c5ff;
     }
 
-    .container {
-      padding: 1.5rem;
-      background: white;
+    body {
+      width: 400px;
+      font-family: 'Sora', sans-serif;
+      background: linear-gradient(160deg, var(--bg-0) 0%, var(--bg-1) 100%);
+      color: var(--text);
       min-height: 100vh;
     }
 
-    header {
-      text-align: center;
-      margin-bottom: 1.5rem;
-      border-bottom: 2px solid #f0f0f0;
-      padding-bottom: 1rem;
+    .container {
+      padding: 1.2rem;
     }
 
-    h1 {
-      font-size: 1.5rem;
-      color: #1f2937;
+    /* ── HEADER ── */
+    header {
+      text-align: center;
+      margin-bottom: 1.2rem;
+      padding-bottom: 0.9rem;
+      border-bottom: 1px solid var(--stroke);
+    }
+
+    .brand-logo {
+      font-size: 1.4rem;
+      font-weight: 800;
+      line-height: 1;
       margin-bottom: 0.25rem;
     }
 
-    .subtitle {
-      font-size: 0.85rem;
-      color: #666;
+    .brand-dark { color: var(--text); }
+    .brand-trace {
+      background: linear-gradient(120deg, var(--cyan), var(--ok));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
 
-    .content {
+    .brand-sub {
+      font-size: 0.75rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+
+    /* ── TABS ── */
+    .tabs {
+      display: flex;
+      gap: 0.4rem;
+      margin-bottom: 1rem;
+      background: rgba(10, 19, 48, 0.6);
+      padding: 0.3rem;
+      border-radius: 10px;
+      border: 1px solid var(--stroke);
+    }
+
+    .tab {
+      flex: 1;
+      padding: 0.45rem;
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.8rem;
+      border-radius: 7px;
+      transition: all 0.2s;
+      font-family: 'Sora', sans-serif;
+    }
+
+    .tab.active {
+      background: linear-gradient(120deg, #4f9fff, #44ddb5);
+      color: #031325;
+    }
+
+    /* ── SECTIONS ── */
+    .section {
       margin-bottom: 1rem;
     }
 
-    .section {
-      margin-bottom: 1.5rem;
-    }
-
-    label {
-      display: block;
-      margin-bottom: 0.5rem;
-      font-weight: 500;
-      color: #374151;
-      font-size: 0.9rem;
-    }
-
-    textarea {
-      width: 100%;
-      padding: 0.75rem;
-      border: 1px solid #e5e7eb;
-      border-radius: 0.375rem;
-      font-family: inherit;
-      font-size: 0.9rem;
-      resize: vertical;
-      min-height: 80px;
-    }
-
-    textarea:focus {
-      outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
-    .input-group {
-      display: flex;
-      gap: 0.5rem;
-      margin-bottom: 0.5rem;
-    }
-
-    button {
-      padding: 0.5rem 1rem;
-      border: none;
-      border-radius: 0.375rem;
-      cursor: pointer;
-      font-weight: 500;
-      font-size: 0.9rem;
-      transition: all 0.3s;
-    }
-
-    .primary-btn {
-      background: #667eea;
-      color: white;
-      flex: 1;
-    }
-
-    .primary-btn:hover {
-      background: #5568d3;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-    }
-
-    .primary-btn:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-    }
-
-    .secondary-btn {
-      background: #f0f0f0;
-      color: #374151;
-      flex: 1;
-    }
-
-    .secondary-btn:hover {
-      background: #e5e5e5;
-    }
-
+    /* ── URL INFO ── */
     .url-info {
-      padding: 0.75rem;
-      background: #f0f4ff;
-      border-radius: 0.375rem;
-      border-left: 3px solid #667eea;
-      margin-bottom: 0.5rem;
-      font-size: 0.85rem;
+      padding: 0.65rem 0.8rem;
+      background: rgba(88, 197, 255, 0.07);
+      border-radius: 8px;
+      border: 1px solid rgba(88, 197, 255, 0.2);
+      margin-bottom: 0.7rem;
+      font-size: 0.78rem;
     }
 
     .url-info strong {
       display: block;
-      color: #667eea;
-      margin-bottom: 0.25rem;
+      color: var(--cyan);
+      margin-bottom: 0.2rem;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
 
     .url-info p {
-      color: #666;
+      color: var(--muted);
       word-break: break-all;
       margin: 0;
+      font-family: monospace;
+      font-size: 0.76rem;
     }
 
-    #result {
-      margin-top: 1rem;
-      padding: 1rem;
-      border-radius: 0.5rem;
-      display: none;
-    }
-
-    #result.show {
+    /* ── LABEL ── */
+    label {
       display: block;
+      margin-bottom: 0.45rem;
+      font-weight: 600;
+      color: var(--muted);
+      font-size: 0.8rem;
     }
 
-    #result.safe {
-      background: #d1fae5;
-      border-left: 4px solid #10b981;
-      color: #065f46;
+    /* ── TEXTAREA ── */
+    textarea {
+      width: 100%;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid var(--stroke);
+      border-radius: 8px;
+      background: rgba(6, 12, 30, 0.85);
+      color: var(--text);
+      font-family: 'Sora', sans-serif;
+      font-size: 0.8rem;
+      resize: vertical;
+      min-height: 80px;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
 
-    #result.suspicious {
-      background: #fef3c7;
-      border-left: 4px solid #f59e0b;
-      color: #78350f;
+    textarea:focus {
+      outline: none;
+      border-color: rgba(88, 197, 255, 0.7);
+      box-shadow: 0 0 0 3px rgba(88, 197, 255, 0.12);
     }
 
-    #result.danger {
-      background: #fee2e2;
-      border-left: 4px solid #dc2626;
-      color: #7f1d1d;
+    /* ── BUTTONS ── */
+    .input-group {
+      display: flex;
+      gap: 0.45rem;
+      margin-top: 0.6rem;
     }
 
-    #result h3 {
-      margin-bottom: 0.5rem;
-      font-size: 1rem;
+    button.primary-btn {
+      flex: 1;
+      padding: 0.55rem 0.9rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 0.82rem;
+      transition: all 0.2s;
+      background: linear-gradient(120deg, #4f9fff, #44ddb5);
+      color: #031325;
+      font-family: 'Sora', sans-serif;
     }
 
-    #result p {
-      font-size: 0.9rem;
-      margin-bottom: 0.25rem;
+    button.primary-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(79, 159, 255, 0.35);
     }
 
+    button.primary-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    button.secondary-btn {
+      padding: 0.55rem 0.9rem;
+      border: 1px solid var(--stroke);
+      border-radius: 8px;
+      background: rgba(90, 136, 255, 0.1);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: all 0.2s;
+      font-family: 'Sora', sans-serif;
+    }
+
+    /* ── LOADING ── */
     .loading {
       text-align: center;
       padding: 1rem;
       display: none;
     }
 
-    .loading.show {
-      display: block;
-    }
+    .loading.show { display: block; }
 
     .spinner {
       display: inline-block;
-      width: 20px;
-      height: 20px;
-      border: 3px solid #f0f0f0;
-      border-top-color: #667eea;
+      width: 22px;
+      height: 22px;
+      border: 3px solid rgba(88, 197, 255, 0.2);
+      border-top-color: var(--cyan);
       border-radius: 50%;
-      animation: spin 1s linear infinite;
+      animation: spin 0.9s linear infinite;
     }
 
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
 
-    .error {
-      color: #dc2626;
-      font-size: 0.85rem;
+    .loading p {
       margin-top: 0.5rem;
-      display: none;
+      font-size: 0.8rem;
+      color: var(--muted);
     }
 
-    .error.show {
+    /* ── ERROR ── */
+    .error {
+      color: var(--hot);
+      font-size: 0.8rem;
+      margin-top: 0.45rem;
+      display: none;
+      background: rgba(255, 95, 122, 0.08);
+      border: 1px solid rgba(255, 95, 122, 0.3);
+      border-radius: 6px;
+      padding: 0.4rem 0.6rem;
+    }
+
+    .error.show { display: block; }
+
+    /* ── RESULT CONTAINER ── */
+    #result {
+      margin-top: 0.8rem;
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+
+    #result.show { display: block; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── WARNING BANNER ── */
+    #warning-banner {
+      display: none;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 59, 92, 0.6);
+      background: rgba(255, 59, 92, 0.1);
+      padding: 1rem;
+      margin-bottom: 0.8rem;
+    }
+
+    #warning-banner.show { display: block; }
+
+    .warning-icon {
+      font-size: 2rem;
+      text-align: center;
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+
+    .warning-title {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: var(--hot-crit);
+      text-align: center;
+      margin-bottom: 0.6rem;
+    }
+
+    .warning-score-row {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 0.6rem;
+    }
+
+    .warning-score-chip {
+      text-align: center;
+      background: rgba(255, 59, 92, 0.12);
+      border: 1px solid rgba(255, 59, 92, 0.3);
+      border-radius: 8px;
+      padding: 0.4rem 0.7rem;
+    }
+
+    .warning-score-chip .chip-label {
+      font-size: 0.66rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
       display: block;
     }
 
+    .warning-score-chip .chip-value {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--hot-crit);
+    }
+
+    .warning-explanation {
+      font-size: 0.78rem;
+      color: #ffd6de;
+      margin-bottom: 0.7rem;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    .go-back-btn {
+      width: 100%;
+      padding: 0.6rem;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(120deg, #ff3b5c, #ff5f7a);
+      color: #fff;
+      font-weight: 800;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Sora', sans-serif;
+    }
+
+    .go-back-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(255, 59, 92, 0.4);
+    }
+
+    /* ── RESULT CARD ── */
+    .result-card {
+      border-radius: 10px;
+      padding: 0.9rem;
+      border: 1px solid;
+    }
+
+    .result-card.safe {
+      border-color: rgba(53, 224, 179, 0.4);
+      background: rgba(53, 224, 179, 0.06);
+    }
+
+    .result-card.suspicious {
+      border-color: rgba(255, 191, 77, 0.4);
+      background: rgba(255, 191, 77, 0.06);
+    }
+
+    .result-card.danger {
+      border-color: rgba(255, 59, 92, 0.4);
+      background: rgba(255, 59, 92, 0.06);
+    }
+
+    .result-heading {
+      font-size: 1rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+    }
+
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      padding: 0.3rem 0;
+      border-bottom: 1px solid rgba(113, 167, 255, 0.1);
+    }
+
+    .result-row:last-child { border-bottom: none; }
+
+    .result-label { color: var(--muted); }
+
+    .result-value {
+      font-weight: 700;
+      font-size: 0.82rem;
+    }
+
+    .feature-list {
+      margin-top: 0.5rem;
+      padding: 0;
+      list-style: none;
+    }
+
+    .feature-list li {
+      font-size: 0.76rem;
+      color: var(--muted);
+      padding: 0.22rem 0;
+      border-bottom: 1px solid rgba(113, 167, 255, 0.08);
+    }
+
+    /* ── SECURITY RECOMMENDATIONS ── */
+    .rec-panel {
+      background: rgba(53, 224, 179, 0.05);
+      border: 1px solid rgba(53, 224, 179, 0.18);
+      border-radius: 8px;
+      padding: 0.65rem 0.8rem;
+      margin-top: 0.7rem;
+    }
+
+    .rec-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--ok);
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .rec-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .rec-list li {
+      font-size: 0.76rem;
+      color: var(--text);
+      padding: 0.2rem 0;
+      border-bottom: 1px solid rgba(53, 224, 179, 0.08);
+      line-height: 1.4;
+    }
+
+    .rec-list li:last-child { border-bottom: none; }
+
+    /* ── STATS ── */
     .stats {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 0.75rem;
-      margin-top: 1rem;
-      padding-top: 1rem;
-      border-top: 2px solid #f0f0f0;
+      gap: 0.6rem;
+      margin-top: 0.9rem;
+      padding-top: 0.9rem;
+      border-top: 1px solid var(--stroke);
+      display: none;
     }
 
     .stat {
       text-align: center;
+      background: rgba(10, 19, 48, 0.5);
+      border: 1px solid var(--stroke);
+      border-radius: 8px;
+      padding: 0.5rem;
     }
 
     .stat-value {
-      font-size: 1.5rem;
-      font-weight: bold;
-      color: #667eea;
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: var(--cyan);
     }
 
     .stat-label {
-      font-size: 0.75rem;
-      color: #666;
-      margin-top: 0.25rem;
-    }
-
-    .tabs {
-      display: flex;
-      gap: 0.5rem;
-      margin-bottom: 1rem;
-      border-bottom: 2px solid #e5e7eb;
-    }
-
-    .tab {
-      padding: 0.5rem 1rem;
-      background: none;
-      border: none;
-      color: #999;
-      cursor: pointer;
-      font-weight: 500;
-      border-bottom: 2px solid transparent;
-      margin-bottom: -2px;
-    }
-
-    .tab.active {
-      color: #667eea;
-      border-bottom-color: #667eea;
+      font-size: 0.68rem;
+      color: var(--muted);
+      margin-top: 0.15rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>🛡️ PhishShield</h1>
-      <p class="subtitle">Real-time Phishing Detection</p>
+      <div class="brand-logo">
+        <span class="brand-dark">Dark</span><span class="brand-trace">Trace</span>
+      </div>
+      <p class="brand-sub">Real-Time Phishing Detection</p>
     </header>
 
-    <div class="content">
-      <div class="tabs">
-        <button class="tab active" onclick="switchTab('url')">URL Check</button>
-        <button class="tab" onclick="switchTab('email')">Email Check</button>
-      </div>
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('url')">🔗 URL Check</button>
+      <button class="tab" onclick="switchTab('email')">📧 Email Check</button>
+    </div>
 
-      <div id="url-section" class="section">
-        <div class="url-info">
-          <strong>Current URL:</strong>
-          <p id="current-url">Loading...</p>
+    <div id="url-section" class="section">
+      <div class="url-info">
+        <strong>Current URL</strong>
+        <p id="current-url">Loading...</p>
+      </div>
+      <button class="primary-btn" onclick="analyzeCurrentURL()">🔍 Analyze Current Page</button>
+    </div>
+
+    <div id="email-section" class="section" style="display: none;">
+      <label>Paste suspicious email or text:</label>
+      <textarea id="email-input" placeholder="Paste email content here..."></textarea>
+      <div class="input-group">
+        <button class="primary-btn" onclick="analyzeEmail()">🔍 Analyze Email</button>
+      </div>
+    </div>
+
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>Analyzing with DarkTrace AI...</p>
+    </div>
+
+    <div class="error" id="error"></div>
+
+    <div id="result">
+      <!-- Warning Banner (shown only for Phishing) -->
+      <div id="warning-banner">
+        <span class="warning-icon">☠️</span>
+        <div class="warning-title">⚠️ DANGEROUS WEBSITE DETECTED</div>
+        <div class="warning-score-row">
+          <div class="warning-score-chip">
+            <span class="chip-label">Risk Score</span>
+            <span class="chip-value" id="warning-score">—</span>
+          </div>
+          <div class="warning-score-chip">
+            <span class="chip-label">Confidence</span>
+            <span class="chip-value" id="warning-confidence">—</span>
+          </div>
         </div>
-        <button class="primary-btn" onclick="analyzeCurrentURL()">Check Current URL</button>
+        <p class="warning-explanation" id="warning-explanation">This site exhibits multiple phishing indicators.</p>
+        <button class="go-back-btn" onclick="goBack()">← Go Back to Safety</button>
       </div>
 
-      <div id="email-section" class="section" style="display: none;">
-        <label>Paste suspicious email or text:</label>
-        <textarea id="email-input" placeholder="Paste email content or text here..."></textarea>
-        <button class="primary-btn" onclick="analyzeEmail()">Analyze Email</button>
+      <!-- Normal Result Card -->
+      <div id="result-card"></div>
+    </div>
+
+    <div class="stats" id="stats">
+      <div class="stat">
+        <div class="stat-label">Total Scans</div>
+        <div class="stat-value" id="stat-total">0</div>
       </div>
-
-      <div class="loading" id="loading">
-        <div class="spinner"></div>
-        <p style="margin-top: 0.5rem; font-size: 0.9rem; color: #666;">Analyzing...</p>
-      </div>
-
-      <div class="error" id="error"></div>
-
-      <div id="result"></div>
-
-      <div class="stats" id="stats" style="display: none;">
-        <div class="stat">
-          <div class="stat-label">Total Scans</div>
-          <div class="stat-value" id="stat-total">0</div>
-        </div>
-        <div class="stat">
-          <div class="stat-label">This Session</div>
-          <div class="stat-value" id="stat-session">0</div>
-        </div>
+      <div class="stat">
+        <div class="stat-label">This Session</div>
+        <div class="stat-value" id="stat-session">0</div>
       </div>
     </div>
   </div>

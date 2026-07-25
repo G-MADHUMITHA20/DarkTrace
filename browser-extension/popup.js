@@ -1,11 +1,32 @@
 const API_BASE = 'http://localhost:4000';
 let sessionScans = 0;
 
+// Security recommendations by classification
+const RECOMMENDATIONS = {
+  Phishing: [
+    '🚫 Do not click any links on this page.',
+    '🔐 Change your password if you interacted.',
+    '📢 Report this site to your security team.',
+    '🌐 Visit the official site directly.',
+  ],
+  Suspicious: [
+    '⚠️ Proceed with caution.',
+    '🔍 Verify the site through official channels.',
+    '🔐 Enable Two-Factor Authentication.',
+    '🌐 Do not enter sensitive information.',
+  ],
+  Legitimate: [
+    '✅ Looks safe — stay vigilant.',
+    '🔐 Keep 2FA enabled on all accounts.',
+  ],
+};
+
 // Initialize popup
 document.addEventListener('DOMContentLoaded', async () => {
   // Get current URL
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  document.getElementById('current-url').textContent = tab.url || 'N/A';
+  const urlEl = document.getElementById('current-url');
+  if (urlEl) urlEl.textContent = tab.url || 'N/A';
 
   // Load stats
   loadStats();
@@ -27,6 +48,9 @@ function switchTab(tab) {
     tabs[0].classList.remove('active');
     tabs[1].classList.add('active');
   }
+
+  // Clear previous results when switching
+  clearResult();
 }
 
 async function analyzeCurrentURL() {
@@ -98,59 +122,125 @@ async function analyzeEmail() {
 
 function displayResult(result) {
   const resultEl = document.getElementById('result');
-  const classification = result.classification;
-  const riskClass = classification === 'Phishing' ? 'danger' : classification === 'Suspicious' ? 'suspicious' : 'safe';
+  const warningBanner = document.getElementById('warning-banner');
+  const resultCard = document.getElementById('result-card');
 
-  const riskEmoji = classification === 'Phishing' ? '🚨' : classification === 'Suspicious' ? '⚠️' : '✅';
+  const classification = result.classification;
+  const riskScore = result.riskScore;
+  const confidence = Math.round((result.mlConfidence || 0.5) * 100);
+  const riskLevel = result.riskLevel || getRiskLevelFromScore(riskScore);
+  const recommendations = RECOMMENDATIONS[classification] || RECOMMENDATIONS.Legitimate;
+
+  // Show / hide warning banner for phishing
+  if (classification === 'Phishing') {
+    document.getElementById('warning-score').textContent = `${riskScore}/100`;
+    document.getElementById('warning-confidence').textContent = `${confidence}%`;
+
+    // Set short explanation from first AI explanation or fallback
+    const firstExplanation = result.explanation && result.explanation.length > 0
+      ? result.explanation[0].replace(/^[🔴🟡✅]\s*/, '')
+      : 'Multiple phishing indicators detected by the AI classifier.';
+    document.getElementById('warning-explanation').textContent = firstExplanation;
+
+    warningBanner.classList.add('show');
+  } else {
+    warningBanner.classList.remove('show');
+  }
+
+  // Render main result card
+  const riskClass = classification === 'Phishing' ? 'danger' : classification === 'Suspicious' ? 'suspicious' : 'safe';
+  const riskEmoji = classification === 'Phishing' ? '☠️' : classification === 'Suspicious' ? '⚠️' : '✅';
 
   let html = `
-    <div class="${riskClass}">
-      <h3>${riskEmoji} ${classification}</h3>
-      <p><strong>Risk Score:</strong> ${result.riskScore}%</p>
-      <p><strong>Confidence:</strong> ${Math.round((result.mlConfidence || 0.5) * 100)}%</p>
-      <p><strong>Processing Time:</strong> ${result.latencyMs}ms</p>
+    <div class="result-card ${riskClass}">
+      <div class="result-heading">${riskEmoji} ${classification} — ${riskLevel}</div>
+      <div class="result-row">
+        <span class="result-label">Risk Score</span>
+        <span class="result-value">${riskScore} / 100</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">ML Confidence</span>
+        <span class="result-value">${confidence}%</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Processing Time</span>
+        <span class="result-value">${result.latencyMs}ms</span>
+      </div>
   `;
 
-  if (result.features && result.features.length > 0) {
-    html += '<p><strong>Detected Features:</strong></p><ul>';
-    result.features.forEach(f => {
-      html += `<li>${f}</li>`;
+  // AI Explanation (top 2 items)
+  if (result.explanation && result.explanation.length > 0) {
+    html += `<div class="result-row" style="flex-direction:column;align-items:flex-start;gap:0.3rem;padding-top:0.5rem;">
+      <span class="result-label" style="margin-bottom:0.2rem;">🧠 AI Explanation</span>`;
+    result.explanation.slice(0, 2).forEach(exp => {
+      html += `<span style="font-size:0.74rem;color:#ecf2ff;line-height:1.4;">${exp.replace(/^[🔴🟡✅]\s*/, '')}</span>`;
     });
-    html += '</ul>';
+    html += `</div>`;
   }
 
-  if (result.reasons && result.reasons.length > 0) {
-    html += '<p><strong>Reasons:</strong></p><ul>';
-    result.reasons.forEach(r => {
-      html += `<li>${r}</li>`;
+  // Detected features (condensed)
+  if (result.features && result.features.length > 0 && result.features[0] !== 'No strong phishing indicators found') {
+    html += `<ul class="feature-list">`;
+    result.features.slice(0, 4).forEach(f => {
+      html += `<li>• ${f}</li>`;
     });
-    html += '</ul>';
+    html += `</ul>`;
   }
 
+  // Domain / threat info
   if (result.whoisData) {
-    html += `
-      <p><strong>Domain Age:</strong> ${result.whoisData.age_days} days</p>
-    `;
+    html += `<div class="result-row">
+      <span class="result-label">🕰️ Domain Age</span>
+      <span class="result-value">${result.whoisData.age_days ?? 'Unknown'} days</span>
+    </div>`;
   }
-
   if (result.threatIntelData) {
-    html += `
-      <p><strong>Threat Score:</strong> ${result.threatIntelData.overallThreatScore.toFixed(0)}/100</p>
-    `;
+    html += `<div class="result-row">
+      <span class="result-label">🛡️ Threat Score</span>
+      <span class="result-value">${result.threatIntelData.overallThreatScore.toFixed(0)}/100</span>
+    </div>`;
     if (result.threatIntelData.isKnownMalicious) {
-      html += '<p style="color: #dc2626; font-weight: bold;">⚠️ Known Malicious Domain</p>';
+      html += `<div class="result-row" style="color:#ff5f7a;font-weight:700;font-size:0.8rem;">⚠️ Known Malicious Domain</div>`;
     }
   }
 
-  html += '</div>';
+  html += `</div>`;
 
-  resultEl.innerHTML = html;
+  // Security recommendations
+  html += `<div class="rec-panel">
+    <div class="rec-title">🛡️ Recommendations</div>
+    <ul class="rec-list">`;
+  recommendations.forEach(rec => {
+    html += `<li>${rec}</li>`;
+  });
+  html += `</ul></div>`;
+
+  resultCard.innerHTML = html;
   resultEl.classList.add('show');
 }
 
+function getRiskLevelFromScore(score) {
+  if (score >= 80) return 'Critical';
+  if (score >= 60) return 'High Risk';
+  if (score >= 35) return 'Medium Risk';
+  if (score >= 15) return 'Low Risk';
+  return 'Safe';
+}
+
+function goBack() {
+  // Send message to background to navigate the active tab back
+  chrome.runtime.sendMessage({ action: 'goBack' });
+  // Also close the popup
+  window.close();
+}
+
 function clearResult() {
-  document.getElementById('result').innerHTML = '';
-  document.getElementById('result').classList.remove('show');
+  const resultEl = document.getElementById('result');
+  const warningBanner = document.getElementById('warning-banner');
+  const resultCard = document.getElementById('result-card');
+  if (resultEl) resultEl.classList.remove('show');
+  if (warningBanner) warningBanner.classList.remove('show');
+  if (resultCard) resultCard.innerHTML = '';
 }
 
 function showLoading(show) {

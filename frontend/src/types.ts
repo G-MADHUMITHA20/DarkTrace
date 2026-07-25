@@ -2,6 +2,8 @@ export type InputKind = "url" | "email";
 
 export type ThreatClass = "Legitimate" | "Suspicious" | "Phishing";
 
+export type RiskLevel = "Safe" | "Low Risk" | "Medium Risk" | "High Risk" | "Critical";
+
 export type WhoisData = {
   domain: string;
   registrant: string;
@@ -42,9 +44,11 @@ export type DetectionResult = {
   kind: InputKind;
   input: string;
   riskScore: number;
+  riskLevel: RiskLevel;
   classification: ThreatClass;
   reasons: string[];
   features: string[];
+  explanation?: string[];
   latencyMs: number;
   processedAt: string;
   mlConfidence?: number;
@@ -58,7 +62,10 @@ export type SummaryStats = {
   totalScans: number;
   phishingDetected: number;
   suspiciousDetected: number;
+  safeCount: number;
   avgLatencyMs: number;
+  avgRiskScore: number;
+  detectionAccuracy: number;
 };
 
 export type AppState = {
