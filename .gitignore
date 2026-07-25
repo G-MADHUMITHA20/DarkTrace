@@ -28,4 +28,5 @@ Thumbs.db
 backend/phishshield.db
 backend/*.db
 backend/*.sqlite
-backend/*.sqlite3
+backend/*.sqlite3 
+
