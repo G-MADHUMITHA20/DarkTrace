@@ -47,16 +47,7 @@ const NAV_ITEMS = [
   { path: "/settings", label: "Settings", icon: <IconSettings /> },
 ];
 
-import Login from "./Login";
-import Signup from "./Signup";
-
-// --- Protected Route Component ---
-function ProtectedRoute({ isAuthenticated, children }: { isAuthenticated: boolean; children: JSX.Element }) {
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-  return children;
-}
+// Authentication removed. App is completely open.
 
 function App() {
   const [state, setState] = useState<AppState | null>(null);
@@ -64,7 +55,6 @@ function App() {
   const location = useLocation();
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
   const [showNotif, setShowNotif] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem("auth"));
   const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -76,15 +66,7 @@ function App() {
     setTheme(prev => prev === "light" ? "dark" : "light");
   };
 
-  const handleLogin = () => {
-    localStorage.setItem("auth", "true");
-    setIsAuthenticated(true);
-  };
 
-  const handleLogout = () => {
-    localStorage.removeItem("auth");
-    setIsAuthenticated(false);
-  };
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -97,7 +79,6 @@ function App() {
   }, []);
 
   const fetchState = async () => {
-    if (!isAuthenticated) return;
     try {
       const latest = await requestJson<AppState>("/api/state");
       setState(latest);
@@ -119,16 +100,13 @@ function App() {
       }
     };
     bootstrap();
-    
-    let poll: number | undefined;
-    if (isAuthenticated) {
-      poll = window.setInterval(fetchState, 5000);
-    }
-    return () => { 
-      mounted = false; 
-      if (poll) window.clearInterval(poll); 
+
+    const poll = window.setInterval(fetchState, 5000);
+    return () => {
+      mounted = false;
+      window.clearInterval(poll);
     };
-  }, [isAuthenticated]);
+  }, []);
 
   if (loading) {
     return (
@@ -141,8 +119,8 @@ function App() {
     );
   }
 
-  // Define the authenticated layout
-  const AuthenticatedLayout = () => {
+  // Define the main layout
+  const MainLayout = () => {
     const currentRouteInfo = PAGE_TITLES[location.pathname] || PAGE_TITLES["/dashboard"];
     return (
       <div className="app-shell">
@@ -172,13 +150,7 @@ function App() {
             ))}
           </nav>
 
-          <div className="sidebar-user" onClick={handleLogout} style={{ cursor: "pointer", borderTop: "1px solid var(--border)", paddingTop: "1rem", marginTop: "auto" }}>
-            <div className="user-avatar">J</div>
-            <div className="user-info">
-              <p className="user-name">John Admin</p>
-              <p className="user-role">Sign Out</p>
-            </div>
-          </div>
+          <div style={{ marginTop: "auto" }}></div>
         </aside>
 
         {/* ---- MAIN AREA ---- */}
@@ -196,15 +168,15 @@ function App() {
 
             <div className="topbar-actions">
               <div className="notif-wrapper" ref={notifRef}>
-                <button 
-                  className="topbar-icon-btn" 
+                <button
+                  className="topbar-icon-btn"
                   title="Notifications"
                   onClick={() => setShowNotif(!showNotif)}
                 >
                   <IconBell />
                   {(state?.summary?.phishingDetected ?? 0) > 0 && <span className="notif-dot" />}
                 </button>
-                
+
                 {showNotif && (
                   <div className="notif-dropdown">
                     <div className="notif-header">
@@ -251,11 +223,10 @@ function App() {
                   </div>
                 )}
               </div>
-              
+
               <button className="topbar-icon-btn" title="Theme Toggle" onClick={toggleTheme}>
                 <IconMoon />
               </button>
-              <div className="topbar-avatar" title="Sign Out" onClick={handleLogout} style={{ cursor: "pointer" }}>J</div>
             </div>
           </header>
 
@@ -280,16 +251,7 @@ function App() {
 
   return (
     <Routes>
-      <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login onLogin={handleLogin} />} />
-      <Route path="/signup" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Signup onLogin={handleLogin} />} />
-      <Route 
-        path="/*" 
-        element={
-          <ProtectedRoute isAuthenticated={isAuthenticated}>
-            <AuthenticatedLayout />
-          </ProtectedRoute>
-        } 
-      />
+      <Route path="/*" element={<MainLayout />} />
     </Routes>
   );
 }

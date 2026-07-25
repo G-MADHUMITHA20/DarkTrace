@@ -40,11 +40,11 @@ db.serialize(() => {
     )
   `);
 
-  db.run("ALTER TABLE scan_results ADD COLUMN emailParsedData TEXT", () => {});
-  db.run("ALTER TABLE scan_results ADD COLUMN riskLevel TEXT", () => {});
-  db.run("ALTER TABLE scan_results ADD COLUMN heuristicResults TEXT", () => {});
-  db.run("ALTER TABLE scan_results ADD COLUMN heuristicScore INTEGER", () => {});
-  db.run("ALTER TABLE scan_results ADD COLUMN mlScore INTEGER", () => {});
+  db.run("ALTER TABLE scan_results ADD COLUMN emailParsedData TEXT", () => { });
+  db.run("ALTER TABLE scan_results ADD COLUMN riskLevel TEXT", () => { });
+  db.run("ALTER TABLE scan_results ADD COLUMN heuristicResults TEXT", () => { });
+  db.run("ALTER TABLE scan_results ADD COLUMN heuristicScore INTEGER", () => { });
+  db.run("ALTER TABLE scan_results ADD COLUMN mlScore INTEGER", () => { });
 
   db.run(`
     CREATE TABLE IF NOT EXISTS alerts (
@@ -116,7 +116,7 @@ function parseDomain(urlText) {
 function generateExplanation(heuristics, classification) {
   const fails = heuristics.filter(h => h.status === "fail");
   const warnings = heuristics.filter(h => h.status === "warning");
-  
+
   if (fails.length === 0 && warnings.length === 0) {
     return ["✅ No significant phishing indicators detected. This appears to be legitimate."];
   }
@@ -280,11 +280,11 @@ function runEmailHeuristics(emailContent, emailParsedData) {
 
   if (emailParsedData?.attachmentCount > 0) {
     if (/\.(exe|zip|rar|scr|msi|js|vbs)\b/i.test(text)) {
-       heuristics.push({ id: "attachments", name: "Suspicious Attachments", status: "fail", explanation: "Contains potentially dangerous executable or archive attachments.", riskContribution: 25 });
-       score += 25;
+      heuristics.push({ id: "attachments", name: "Suspicious Attachments", status: "fail", explanation: "Contains potentially dangerous executable or archive attachments.", riskContribution: 25 });
+      score += 25;
     } else {
-       heuristics.push({ id: "attachments", name: "Attachments", status: "warning", explanation: "Contains attachments that should be verified.", riskContribution: 5 });
-       score += 5;
+      heuristics.push({ id: "attachments", name: "Attachments", status: "warning", explanation: "Contains attachments that should be verified.", riskContribution: 5 });
+      score += 5;
     }
   }
 

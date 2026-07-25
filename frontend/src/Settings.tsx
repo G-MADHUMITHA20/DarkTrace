@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { IconBell, IconShieldCheck, IconSettings, IconAlertTriangle, IconMoon } from "./icons";
+import { IconBell, IconShieldCheck, IconAlertTriangle, IconMoon } from "./icons";
 
 export default function Settings() {
   const [strictness, setStrictness] = useState("medium");
