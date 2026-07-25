@@ -39,15 +39,26 @@ export type Alert = {
   createdAt: string;
 };
 
+export type HeuristicResult = {
+  id: string;
+  name: string;
+  status: "pass" | "warning" | "fail";
+  explanation: string;
+  riskContribution: number;
+};
+
 export type DetectionResult = {
   id: string;
   kind: InputKind;
   input: string;
   riskScore: number;
+  heuristicScore: number;
+  mlScore: number;
   riskLevel: RiskLevel;
   classification: ThreatClass;
   reasons: string[];
   features: string[];
+  heuristicResults: HeuristicResult[];
   explanation?: string[];
   latencyMs: number;
   processedAt: string;

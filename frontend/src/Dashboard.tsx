@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import type { DetectionResult, Alert, SummaryStats } from "./types";
 
 const API_BASE = "http://localhost:4000";
@@ -88,11 +89,6 @@ function IconChevronRight() {
 function IconTrendUp() {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>;
 }
-function IconTrendDown() {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>;
-}
-
-/* ---- Inline SVG Line Chart ---- */
 function LineTrendChart({ results }: { results: DetectionResult[] }) {
   const width = 520;
   const height = 160;
@@ -185,66 +181,54 @@ function LineTrendChart({ results }: { results: DetectionResult[] }) {
   );
 }
 
-/* ---- SVG Donut Chart ---- */
+/* ---- Responsive Donut Chart with Recharts ---- */
 function DonutChart({ phishing, suspicious, safe }: { phishing: number; suspicious: number; safe: number }) {
-  const total = phishing + suspicious + safe || 1;
-  const segments = [
-    { label: "Safe", value: safe, color: "#16A34A" },
-    { label: "Suspicious", value: suspicious, color: "#D97706" },
-    { label: "High Risk", value: phishing * 0.7, color: "#DC2626" },
-    { label: "Critical", value: phishing * 0.3, color: "#991B1B" },
+  const total = phishing + suspicious + safe || 0;
+  const data = [
+    { name: "Safe", value: safe, color: "#16A34A" },
+    { name: "Suspicious", value: suspicious, color: "#D97706" },
+    { name: "High Risk", value: Math.round(phishing * 0.7), color: "#DC2626" },
+    { name: "Critical", value: Math.round(phishing * 0.3), color: "#991B1B" },
   ];
-
-  const cx = 70; const cy = 70; const r = 52; const hole = 34;
-  const circumference = 2 * Math.PI * r;
-
-  let cumPct = 0;
-  const slices = segments.map((s) => {
-    const pct = s.value / total;
-    const offset = cumPct;
-    cumPct += pct;
-    return { ...s, pct, offset };
-  });
 
   return (
     <div className="donut-wrap">
-      <div className="donut-svg-wrap">
-        <svg width="140" height="140" viewBox="0 0 140 140">
-          {slices.map((s, i) => {
-            const dashLen = s.pct * circumference;
-            const dashOffset = circumference - s.offset * circumference;
-            return (
-              <circle
-                key={i}
-                cx={cx} cy={cy} r={r}
-                fill="none"
-                stroke={s.color}
-                strokeWidth={r - hole}
-                strokeDasharray={`${dashLen} ${circumference}`}
-                strokeDashoffset={dashOffset}
-                transform={`rotate(-90 ${cx} ${cy})`}
-              />
-            );
-          })}
-          <circle cx={cx} cy={cy} r={hole} fill="#fff" />
-          <text x={cx} y={cy - 6} textAnchor="middle" fontSize="13" fontWeight="700" fill="#0F172A">
-            {total}
-          </text>
-          <text x={cx} y={cy + 9} textAnchor="middle" fontSize="8" fill="#64748B">
-            Total
-          </text>
-        </svg>
+      <div className="donut-chart-container">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              innerRadius="60%"
+              outerRadius="80%"
+              paddingAngle={2}
+              dataKey="value"
+              stroke="none"
+            >
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
+              ))}
+            </Pie>
+            <Tooltip
+              formatter={(value: any) => [`${value} Scans`, "Count"]}
+              contentStyle={{ borderRadius: "8px", border: "1px solid #E2E8F0", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)" }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
       </div>
       <div className="donut-legend">
-        {slices.map((s) => (
-          <div key={s.label} className="donut-legend-item">
-            <span className="donut-legend-label">
-              <span className="donut-legend-dot" style={{ background: s.color }} />
-              {s.label}
-            </span>
-            <span className="donut-legend-pct">{total > 0 ? (s.pct * 100).toFixed(1) : "0.0"}%</span>
-          </div>
-        ))}
+        {data.map((entry, index) => {
+          const pct = total > 0 ? ((entry.value / total) * 100).toFixed(0) : "0";
+          return (
+            <div key={`item-${index}`} className="donut-legend-item">
+              <div className="donut-legend-label">
+                <span className="donut-legend-dot" style={{ background: entry.color }} />
+                <span>{entry.name}</span>
+              </div>
+              <div className="donut-legend-spacer"></div>
+              <span className="donut-legend-pct">{pct}%</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -269,16 +253,14 @@ function RiskDistChart({ results }: { results: DetectionResult[] }) {
     <div className="risk-dist-list">
       {counts.map((b) => (
         <div key={b.label} className="risk-dist-item">
-          <div className="risk-dist-header">
-            <span className="risk-dist-label">{b.label}</span>
-            <span className="risk-dist-pct">{((b.count / total) * 100).toFixed(1)}%</span>
-          </div>
+          <span className="risk-dist-label">{b.label}</span>
           <div className="risk-dist-bar-track">
             <div
               className="risk-dist-bar"
               style={{ width: `${(b.count / total) * 100}%`, background: b.color }}
             />
           </div>
+          <span className="risk-dist-pct">{((b.count / total) * 100).toFixed(0)}%</span>
         </div>
       ))}
     </div>
@@ -631,7 +613,6 @@ export default function Dashboard() {
   const suspiciousCount = stats?.suspiciousDetected ?? 0;
   const highRiskCount = phishingCount + suspiciousCount;
   const detectionAccuracy = stats?.detectionAccuracy ?? 0;
-  const avgRiskScore = stats?.avgRiskScore ?? 0;
 
   const totalPages = Math.ceil(results.length / PAGE_SIZE);
   const paginatedResults = results.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);

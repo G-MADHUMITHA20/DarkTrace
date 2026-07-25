@@ -42,6 +42,9 @@ db.serialize(() => {
 
   db.run("ALTER TABLE scan_results ADD COLUMN emailParsedData TEXT", () => {});
   db.run("ALTER TABLE scan_results ADD COLUMN riskLevel TEXT", () => {});
+  db.run("ALTER TABLE scan_results ADD COLUMN heuristicResults TEXT", () => {});
+  db.run("ALTER TABLE scan_results ADD COLUMN heuristicScore INTEGER", () => {});
+  db.run("ALTER TABLE scan_results ADD COLUMN mlScore INTEGER", () => {});
 
   db.run(`
     CREATE TABLE IF NOT EXISTS alerts (
@@ -110,65 +113,21 @@ function parseDomain(urlText) {
 
 // ==================== AI EXPLANATION GENERATOR ====================
 
-function generateExplanation(features, classification, kind) {
-  const explanations = [];
-
-  // Feature-based explanations
-  if (features.includes("Contains IP address")) {
-    explanations.push("🔴 URL uses a raw IP address instead of a domain name — a classic phishing tactic to evade detection.");
-  }
-  if (features.includes("Non-HTTPS URL")) {
-    explanations.push("🔴 Connection is not encrypted (HTTP). Legitimate sites use HTTPS to protect your data.");
-  }
-  if (features.includes("Suspicious subdomain structure")) {
-    explanations.push("🟡 Domain has an unusual multi-level subdomain structure commonly used to mimic trusted brands.");
-  }
-  if (features.includes("Shortened URL")) {
-    explanations.push("🟡 URL uses a link shortener that hides the real destination, a common phishing vector.");
-  }
-  if (features.includes("Possible homograph (punycode)")) {
-    explanations.push("🔴 URL contains international characters (punycode) designed to visually impersonate a legitimate domain.");
-  }
-  if (features.includes("Excessively long URL")) {
-    explanations.push("🟡 URL is unusually long, which may be used to confuse users or hide the real destination.");
-  }
-  if (features.includes("Very young domain")) {
-    explanations.push("🔴 Domain was registered very recently — newly created domains are frequently used for phishing attacks.");
-  }
-  if (features.includes("Urgent language")) {
-    explanations.push("🔴 Email contains urgency triggers ('act now', 'suspended', 'immediately') — a social engineering tactic.");
-  }
-  if (features.includes("Credential request")) {
-    explanations.push("🔴 Email requests passwords, OTPs, or account credentials — legitimate organizations never ask for these via email.");
-  }
-  if (features.includes("Financial lure")) {
-    explanations.push("🔴 Email references financial transactions (invoices, wire transfers, gift cards) under pressure — a scam indicator.");
-  }
-  if (features.includes("Reply-To mismatch")) {
-    explanations.push("🔴 Reply-To address differs from sender — a strong indicator of email spoofing.");
-  }
-  if (features.includes("Suspicious file extension")) {
-    explanations.push("🔴 Email references executable or archive files (.exe, .zip, .scr) that could contain malware.");
-  }
-  if (features.some(f => f.startsWith("Email links:"))) {
-    explanations.push("🟡 Email contains embedded links — verify each URL before clicking.");
-  }
-  if (features.some(f => f.startsWith("Attachments:"))) {
-    explanations.push("🟡 Email has attachments — treat with caution and scan before opening.");
+function generateExplanation(heuristics, classification) {
+  const fails = heuristics.filter(h => h.status === "fail");
+  const warnings = heuristics.filter(h => h.status === "warning");
+  
+  if (fails.length === 0 && warnings.length === 0) {
+    return ["✅ No significant phishing indicators detected. This appears to be legitimate."];
   }
 
-  // Classification-level explanations
-  if (classification === "Phishing" && explanations.length === 0) {
-    explanations.push("🔴 Multiple phishing indicators detected. The ML classifier flagged this as highly suspicious.");
+  const exp = [];
+  if (fails.length > 0) {
+    exp.push(`🔴 Classified as dangerous due to: ` + fails.map(f => f.explanation).join(" "));
+  } else if (warnings.length > 0) {
+    exp.push(`🟡 Flagged as suspicious because: ` + warnings.map(f => f.explanation).join(" "));
   }
-  if (classification === "Suspicious" && explanations.length === 0) {
-    explanations.push("🟡 Some phishing indicators detected. Proceed with caution.");
-  }
-  if (classification === "Legitimate" && explanations.length === 0) {
-    explanations.push("✅ No significant phishing indicators detected. This appears to be legitimate.");
-  }
-
-  return explanations;
+  return exp;
 }
 
 const urlClassifier = new natural.BayesClassifier();
@@ -212,65 +171,142 @@ emailClassifier.train();
 
 // ==================== FEATURE EXTRACTION ====================
 
-function extractFeatures(kind, content) {
-  const text = String(content || "").toLowerCase();
-  const features = [];
+function runUrlHeuristics(url, whoisData, threatIntelData) {
+  const heuristics = [];
+  let score = 0;
+  const urlLower = String(url || "").toLowerCase();
 
-  if (kind === "url") {
-    features.push(`URL length: ${text.length}`);
-    if (/https?:\/\/(\d+\.){3}\d+/.test(text)) features.push("Contains IP address");
-    if (text.includes("http://")) features.push("Non-HTTPS URL");
-    if (/xn--/.test(text)) features.push("Possible homograph (punycode)");
-    if (/bit\.ly|tinyurl|t\.co|shorturl|goo\.gl/.test(text)) features.push("Shortened URL");
-    if (text.length > 75) features.push("Excessively long URL");
-    const domainMatch = text.match(/https?:\/\/([^\/]+)/);
-    if (domainMatch) {
-      const domain = domainMatch[1];
-      if (domain.split(".").length > 3) features.push("Suspicious subdomain structure");
+  if (whoisData && whoisData.age_days !== null) {
+    if (whoisData.age_days < 30) {
+      heuristics.push({ id: "domain_age", name: "Domain Age", status: "fail", explanation: "Newly registered domain (less than 30 days).", riskContribution: 20 });
+      score += 20;
+    } else if (whoisData.age_days < 180) {
+      heuristics.push({ id: "domain_age", name: "Domain Age", status: "warning", explanation: "Moderate domain age (less than 6 months).", riskContribution: 10 });
+      score += 10;
+    } else {
+      heuristics.push({ id: "domain_age", name: "Domain Age", status: "pass", explanation: "Trusted domain age.", riskContribution: 0 });
+    }
+  } else {
+    heuristics.push({ id: "domain_age", name: "Domain Age", status: "warning", explanation: "Domain age unavailable.", riskContribution: 5 });
+    score += 5;
+  }
+
+  if (url.length > 75) {
+    heuristics.push({ id: "url_length", name: "URL Length", status: "fail", explanation: `Unusually long URL (${url.length} characters).`, riskContribution: 15 });
+    score += 15;
+  } else {
+    heuristics.push({ id: "url_length", name: "URL Length", status: "pass", explanation: "Normal URL length.", riskContribution: 0 });
+  }
+
+  if (urlLower.startsWith("http://")) {
+    heuristics.push({ id: "https", name: "HTTPS Verification", status: "fail", explanation: "Unencrypted HTTP connection.", riskContribution: 15 });
+    score += 15;
+  } else {
+    heuristics.push({ id: "https", name: "HTTPS Verification", status: "pass", explanation: "HTTPS Enabled.", riskContribution: 0 });
+  }
+
+  if (/(bit\.ly|tinyurl\.com|t\.co|shorturl\.at|goo\.gl)/i.test(urlLower)) {
+    heuristics.push({ id: "redirect", name: "Redirect Analysis", status: "warning", explanation: "URL uses a link shortener.", riskContribution: 15 });
+    score += 15;
+  } else {
+    heuristics.push({ id: "redirect", name: "Redirect Analysis", status: "pass", explanation: "Direct link, no known shorteners detected.", riskContribution: 0 });
+  }
+
+  let suspiciousCount = 0;
+  if ((urlLower.match(/-/g) || []).length > 3) suspiciousCount += 1;
+  if (urlLower.includes("@")) suspiciousCount += 1;
+  if (/(%[0-9A-Fa-f]{2}){3,}/.test(url)) suspiciousCount += 1;
+  if (/[0-9]{5,}/.test(url)) suspiciousCount += 1;
+
+  if (suspiciousCount > 1) {
+    heuristics.push({ id: "chars", name: "Suspicious Characters", status: "fail", explanation: "Contains multiple suspicious character patterns (e.g., @, excessive hyphens).", riskContribution: 15 });
+    score += 15;
+  } else {
+    heuristics.push({ id: "chars", name: "Suspicious Characters", status: "pass", explanation: "Clean character composition.", riskContribution: 0 });
+  }
+
+  const domainMatch = urlLower.match(/https?:\/\/([^\/]+)/);
+  const domain = domainMatch ? domainMatch[1] : "";
+  if (/(g[o0]{2,}gle|paypa[l1i]|faceb[o0]{2}k|micr[o0]s[o0]ft|app[l1]e)/.test(domain) && !/(google\.com|paypal\.com|facebook\.com|microsoft\.com|apple\.com)$/.test(domain)) {
+    heuristics.push({ id: "typo", name: "Typosquatting Detection", status: "fail", explanation: "Look-alike domain detected targeting a popular brand.", riskContribution: 25 });
+    score += 25;
+  } else {
+    heuristics.push({ id: "typo", name: "Typosquatting Detection", status: "pass", explanation: "No obvious typosquatting detected.", riskContribution: 0 });
+  }
+
+  if (threatIntelData?.isKnownMalicious) {
+    heuristics.push({ id: "blacklist", name: "Blacklist Lookup", status: "fail", explanation: "Domain is flagged on known threat intelligence blocklists.", riskContribution: 30 });
+    score += 30;
+  } else {
+    heuristics.push({ id: "blacklist", name: "Blacklist Lookup", status: "pass", explanation: "Domain is not on any active blacklists.", riskContribution: 0 });
+  }
+
+  if (/https?:\/\/(\d+\.){3}\d+/.test(urlLower)) {
+    heuristics.push({ id: "raw_ip", name: "IP-based URL", status: "fail", explanation: "Uses a raw IP address instead of a domain name.", riskContribution: 25 });
+    score += 25;
+  }
+
+  return { heuristics, score };
+}
+
+function runEmailHeuristics(emailContent, emailParsedData) {
+  const heuristics = [];
+  let score = 0;
+  const text = String(emailContent || "").toLowerCase();
+
+  if (/urgent|act now|immediately|suspended|final notice|confirm|verify/.test(text)) {
+    heuristics.push({ id: "urgency", name: "Urgent Language", status: "fail", explanation: "Contains urgency triggers (e.g., 'act now', 'suspended').", riskContribution: 15 });
+    score += 15;
+  } else {
+    heuristics.push({ id: "urgency", name: "Urgent Language", status: "pass", explanation: "No urgent language detected.", riskContribution: 0 });
+  }
+
+  if (/password|otp|verify|login|bank|account|credentials/.test(text)) {
+    heuristics.push({ id: "credentials", name: "Credential Request", status: "fail", explanation: "Requests passwords, OTPs, or account credentials.", riskContribution: 20 });
+    score += 20;
+  }
+
+  if (/invoice|payment|wire|gift card|refund|transfer|claim/.test(text)) {
+    heuristics.push({ id: "financial", name: "Financial Lure", status: "fail", explanation: "References financial transactions under pressure.", riskContribution: 15 });
+    score += 15;
+  }
+
+  if (emailParsedData?.hasReplyToMismatch) {
+    heuristics.push({ id: "spoofing", name: "Sender Spoofing", status: "fail", explanation: "Reply-To address differs from the sender address.", riskContribution: 20 });
+    score += 20;
+  } else {
+    heuristics.push({ id: "spoofing", name: "Sender Spoofing", status: "pass", explanation: "Sender addresses match.", riskContribution: 0 });
+  }
+
+  if (emailParsedData?.attachmentCount > 0) {
+    if (/\.(exe|zip|rar|scr|msi|js|vbs)\b/i.test(text)) {
+       heuristics.push({ id: "attachments", name: "Suspicious Attachments", status: "fail", explanation: "Contains potentially dangerous executable or archive attachments.", riskContribution: 25 });
+       score += 25;
+    } else {
+       heuristics.push({ id: "attachments", name: "Attachments", status: "warning", explanation: "Contains attachments that should be verified.", riskContribution: 5 });
+       score += 5;
     }
   }
 
-  if (kind === "email") {
-    if (/urgent|act now|immediately|suspended|final notice|confirm|verify/.test(text)) features.push("Urgent language");
-    if (/password|otp|verify|login|bank|account|credentials/.test(text)) features.push("Credential request");
-    if (/invoice|payment|wire|gift card|refund|transfer|claim/.test(text)) features.push("Financial lure");
-    if (/https?:\/\//.test(text)) features.push("Contains link");
-    if (text.split("@").length - 1 > 1) features.push("Multiple email addresses");
-    if (/exe|zip|rar|scr|msi/.test(text)) features.push("Suspicious file extension");
+  if (emailParsedData?.linkCount > 0) {
+    heuristics.push({ id: "links", name: "Embedded Links", status: "warning", explanation: `Contains ${emailParsedData.linkCount} embedded link(s).`, riskContribution: 5 });
+    score += 5;
   }
 
-  return features.length ? features : ["No strong phishing indicators found"];
+  return { heuristics, score };
 }
 
 // ==================== ML SCORING ENGINE ====================
 
-function calculateMLScore(kind, content, features) {
+function calculateMLScore(kind, content) {
   const text = String(content || "").toLowerCase();
   const classifier = kind === "url" ? urlClassifier : emailClassifier;
   const label = classifier.classify(text);
   const probs = classifier.getClassifications(text);
   const phishingProb = probs.find((entry) => entry.label === "phishing")?.value ?? 0.5;
 
-  let mlScore = label === "phishing" ? 0.6 + phishingProb * 0.35 : 0.25 + phishingProb * 0.45;
-  mlScore += Math.min(features.length * 0.03, 0.15);
-
-  return clamp(Number(mlScore.toFixed(3)), 0.1, 0.99);
-}
-
-function scoreInput(kind, content, features) {
-  const text = String(content || "").toLowerCase();
-  let score = kind === "url" ? 12 : 10;
-
-  score += features.length * 12;
-  if (/https?:\/\/(\d+\.){3}\d+/.test(text)) score += 18;
-  if (/urgent|password|otp|verify|bank|invoice|payment|suspended|action/.test(text)) score += 14;
-  if (/http:\/\//.test(text)) score += 10;
-  if (/https?:\/\/([^\/]+)/.test(text)) {
-    const urlDomain = text.match(/https?:\/\/([^\/]+)/)[1];
-    if (urlDomain.split(".").length > 3) score += 8;
-  }
-
-  return clamp(Math.round(score), 0, 99);
+  let mlScore = label === "phishing" ? 60 + phishingProb * 35 : 10 + phishingProb * 40;
+  return clamp(Math.round(mlScore), 5, 95);
 }
 
 // ==================== EXTERNAL API INTEGRATIONS ====================
@@ -407,56 +443,30 @@ async function generateAlerts(result) {
 
 async function analyzeInput(kind, content) {
   const startTime = Date.now();
-
-  const features = extractFeatures(kind, content);
-  let riskScore = scoreInput(kind, content, features);
-  const mlConfidence = calculateMLScore(kind, content, features);
-
   let whoisData = null;
   let threatIntelData = null;
   let emailParsedData = null;
+  let heuristicData = { heuristics: [], score: 0 };
+
+  const mlScore = calculateMLScore(kind, content);
 
   if (kind === "url") {
     whoisData = await getWhoisData(content);
     threatIntelData = await getThreatIntelData(content);
-
-    if (whoisData?.age_days !== null && whoisData?.age_days < 30) {
-      riskScore = clamp(riskScore + 10, 0, 99);
-      features.push("Very young domain");
-    }
-
-    if (threatIntelData?.isKnownMalicious) {
-      riskScore = clamp(riskScore + 25, 0, 99);
-    }
+    heuristicData = runUrlHeuristics(content, whoisData, threatIntelData);
   }
 
   if (kind === "email") {
     emailParsedData = await parseEmailContent(content);
-    if (emailParsedData.linkCount > 0) features.push(`Email links: ${emailParsedData.linkCount}`);
-    if (emailParsedData.attachmentCount > 0) features.push(`Attachments: ${emailParsedData.attachmentCount}`);
-    if (emailParsedData.hasReplyToMismatch) {
-      features.push("Reply-To mismatch");
-      riskScore = clamp(riskScore + 8, 0, 99);
-    }
+    heuristicData = runEmailHeuristics(content, emailParsedData);
   }
 
-  const classification = classificationFromScore(riskScore, mlConfidence);
+  const heuristicScore = clamp(heuristicData.score, 0, 100);
+  const riskScore = clamp(Math.round((mlScore * 0.4) + (heuristicScore * 0.6)), 0, 99);
+
+  const classification = classificationFromScore(riskScore, 1);
   const riskLevel = getRiskLevel(riskScore);
-
-  const reasons = [];
-  if (features.includes("Contains IP address")) reasons.push("IP-based URLs are commonly used in phishing.");
-  if (features.includes("Non-HTTPS URL")) reasons.push("Unsecured links are higher risk.");
-  if (features.includes("Urgent language")) reasons.push("Urgency is a common social engineering tactic.");
-  if (features.includes("Credential request")) reasons.push("Requesting sensitive credentials is suspicious.");
-  if (features.includes("Financial lure")) reasons.push("Financial pressure keywords suggest scam behavior.");
-  if (features.includes("Contains link") && kind === "email") reasons.push("Embedded links in emails can hide malicious targets.");
-  if (threatIntelData?.isKnownMalicious) reasons.push("Domain is known in threat intelligence databases.");
-  if (features.includes("Very young domain")) reasons.push("Recently created domains are often abused for phishing.");
-  if (features.includes("Reply-To mismatch")) reasons.push("Reply-To mismatch can indicate sender spoofing.");
-  if (!reasons.length) reasons.push("No major phishing signal detected.");
-
-  const explanation = generateExplanation(features, classification, kind);
-
+  const explanation = generateExplanation(heuristicData.heuristics, classification);
   const latencyMs = clamp(Math.round(Date.now() - startTime + Math.random() * 50), 12, 500);
 
   const result = {
@@ -464,14 +474,17 @@ async function analyzeInput(kind, content) {
     kind,
     input: toPreview(content),
     riskScore,
+    heuristicScore,
+    mlScore,
     riskLevel,
     classification,
-    reasons,
-    features,
+    reasons: heuristicData.heuristics.filter(h => h.status === 'fail').map(h => h.explanation),
+    features: heuristicData.heuristics.map(h => h.name),
+    heuristicResults: heuristicData.heuristics,
     explanation,
     latencyMs,
     processedAt: new Date().toISOString(),
-    mlConfidence: parseFloat(mlConfidence.toFixed(3)),
+    mlConfidence: mlScore / 100,
     whoisData,
     threatIntelData,
     emailParsedData,
@@ -486,8 +499,8 @@ function storeResult(result) {
   return new Promise((resolve, reject) => {
     db.run(
       `INSERT INTO scan_results 
-       (id, kind, input, riskScore, classification, reasons, features, latencyMs, processedAt, whoisData, threatIntelData, emailParsedData, mlConfidence, riskLevel)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, kind, input, riskScore, classification, reasons, features, latencyMs, processedAt, whoisData, threatIntelData, emailParsedData, mlConfidence, riskLevel, heuristicResults, heuristicScore, mlScore)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         result.id,
         result.kind,
@@ -503,6 +516,9 @@ function storeResult(result) {
         JSON.stringify(result.emailParsedData),
         result.mlConfidence,
         result.riskLevel,
+        JSON.stringify(result.heuristicResults),
+        result.heuristicScore,
+        result.mlScore
       ],
       function (err) {
         if (err) reject(err);
@@ -528,6 +544,9 @@ function getRecentResults(limit = 50) {
             threatIntelData: row.threatIntelData ? JSON.parse(row.threatIntelData) : null,
             emailParsedData: row.emailParsedData ? JSON.parse(row.emailParsedData) : null,
             riskLevel: row.riskLevel || getRiskLevel(row.riskScore),
+            heuristicResults: row.heuristicResults ? JSON.parse(row.heuristicResults) : [],
+            heuristicScore: row.heuristicScore || 0,
+            mlScore: row.mlScore || 0
           }));
           resolve(results);
         }
@@ -553,6 +572,9 @@ function searchResults(query, limit = 100) {
             threatIntelData: row.threatIntelData ? JSON.parse(row.threatIntelData) : null,
             emailParsedData: row.emailParsedData ? JSON.parse(row.emailParsedData) : null,
             riskLevel: row.riskLevel || getRiskLevel(row.riskScore),
+            heuristicResults: row.heuristicResults ? JSON.parse(row.heuristicResults) : [],
+            heuristicScore: row.heuristicScore || 0,
+            mlScore: row.mlScore || 0
           }));
           resolve(results);
         }
