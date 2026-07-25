@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { DetectionResult } from "./types";
-import { IconSearch, IconX, IconCheck, IconAlertTriangle } from "./icons"; 
+import { IconSearch, IconX, IconCheck, IconAlertTriangle } from "./icons";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -102,30 +102,32 @@ export default function EmailScanner({ onStateUpdate }: { onStateUpdate: () => v
                 </div>
               </div>
 
-              {result.explanation && result.explanation.length > 0 && (
-                <div>
-                  <p className="result-section-title">AI Explanation</p>
-                  <div className="result-explanation">
-                    {result.explanation.map((exp, i) => <p key={i}>{exp}</p>)}
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <p className="result-section-title">Heuristic Breakdown</p>
-                <div className="heuristic-list">
-                  {result.heuristicResults?.map((h) => (
-                    <div key={h.id} className={`heuristic-item ${h.status}`}>
-                      <div className="heuristic-header">
-                        <span className="heuristic-status-icon">
-                          {h.status === "pass" ? <IconCheck /> : h.status === "fail" ? <IconX /> : <IconAlertTriangle />}
-                        </span>
-                        <span className="heuristic-name">{h.name}</span>
-                        {h.riskContribution > 0 && <span className="heuristic-risk">+{h.riskContribution} Risk</span>}
-                      </div>
-                      <p className="heuristic-desc">{h.explanation}</p>
+              <div className="result-split-layout">
+                {result.explanation && result.explanation.length > 0 && (
+                  <div className="result-split-col">
+                    <p className="result-section-title">AI Explanation</p>
+                    <div className="result-explanation card-compact">
+                      {result.explanation.map((exp, i) => <p key={i}>{exp}</p>)}
                     </div>
-                  ))}
+                  </div>
+                )}
+
+                <div className="result-split-col">
+                  <p className="result-section-title">Heuristic Breakdown</p>
+                  <div className="heuristic-list card-compact">
+                    {result.heuristicResults?.map((h) => (
+                      <div key={h.id} className={`heuristic-item compact ${h.status}`}>
+                        <div className="heuristic-header">
+                          <span className="heuristic-status-icon compact">
+                            {h.status === "pass" ? <IconCheck /> : h.status === "fail" ? <IconX /> : <IconAlertTriangle />}
+                          </span>
+                          <span className="heuristic-name">{h.name}</span>
+                          {h.riskContribution > 0 && <span className="heuristic-risk">+{h.riskContribution} Risk</span>}
+                        </div>
+                        <p className="heuristic-desc">{h.explanation}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
