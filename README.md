@@ -244,20 +244,19 @@ Security Recommendation
 
 ## Future Enhancements
 
-- Real-time WebSocket alerts
-- Deep Learning integration
-- VirusTotal & AlienVault integration
-- Role-Based Access Control (RBAC)
-- Single Sign-On (SSO)
+- Implementation of a real-time WebSocket connection to push alerts directly to the frontend without polling.
+- Transitioning the lightweight Bayesian classifier to a more robust Deep Learning model (e.g., TensorFlow.js or a Python microservice).
+- Expanding the Threat Intelligence module to aggregate data from VirusTotal or AlienVault OTX.
+- Supporting enterprise Single Sign-On (SSO) and Role-Based Access Control (RBAC).
 
 ---
 
 ## Contributors
 
-- Member 1 – Backend & ML
-- Member 2 – Frontend Development
-- Member 3 – UI/UX Design
-- Member 4 – Browser Extension & Threat Intelligence
+- **Member 1:** Lead Backend Developer & ML Integration (API Design, Heuristics, Database)
+- **Member 2:** Frontend Architect (React Dashboard, Recharts, State Management)
+- **Member 3:** UI/UX Designer (Enterprise CSS, Responsive Layouts, Dark Mode)
+- **Member 4:** Extension Developer & Threat Researcher (Browser Extension, WHOIS, Threat Intel Integration)
 
 ---
 
