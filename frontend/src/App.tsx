@@ -9,6 +9,8 @@ import History from "./History";
 import Reports from "./Reports";
 import ThreatIntelligence from "./ThreatIntelligence";
 import Settings from "./Settings";
+import Login from "./Login";
+import Signup from "./Signup";
 import {
   IconShield, IconGlobe, IconMail, IconGrid,
   IconClock, IconAlertTriangle, IconBarChart,
@@ -18,8 +20,12 @@ import {
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = localStorage.getItem("token");
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
   const response = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers,
     ...init,
   });
   if (!response.ok) throw new Error(`Request failed: ${response.status}`);
@@ -47,8 +53,6 @@ const NAV_ITEMS = [
   { path: "/settings", label: "Settings", icon: <IconSettings /> },
 ];
 
-// Authentication removed. App is completely open.
-
 function App() {
   const [state, setState] = useState<AppState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,6 +60,11 @@ function App() {
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
   const [showNotif, setShowNotif] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+
+  const [user, setUser] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -66,19 +75,57 @@ function App() {
     setTheme(prev => prev === "light" ? "dark" : "light");
   };
 
-
-
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setShowNotif(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setShowProfile(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const checkAuth = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setUser(null);
+      setAuthLoading(false);
+      return;
+    }
+    try {
+      const data = await requestJson<{ user: { id: string; name: string; email: string } }>("/api/me");
+      setUser(data.user);
+    } catch {
+      localStorage.removeItem("token");
+      setUser(null);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    checkAuth();
+    const handleAuthChange = () => checkAuth();
+    window.addEventListener("auth-change", handleAuthChange);
+    return () => window.removeEventListener("auth-change", handleAuthChange);
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await requestJson("/api/logout", { method: "POST" });
+    } catch (e) {
+      console.error(e);
+    }
+    localStorage.removeItem("token");
+    setUser(null);
+    setShowProfile(false);
+  };
+
   const fetchState = async () => {
+    if (!user) return;
     try {
       const latest = await requestJson<AppState>("/api/state");
       setState(latest);
@@ -90,6 +137,10 @@ function App() {
   useEffect(() => {
     let mounted = true;
     const bootstrap = async () => {
+      if (!user) {
+        if (mounted) setLoading(false);
+        return;
+      }
       try {
         const response = await requestJson<BootstrapResponse>("/api/bootstrap");
         if (mounted) setState(response.state);
@@ -106,9 +157,9 @@ function App() {
       mounted = false;
       window.clearInterval(poll);
     };
-  }, []);
+  }, [user]);
 
-  if (loading) {
+  if (authLoading || (loading && user)) {
     return (
       <div className="status-screen">
         <div className="loading-box">
@@ -121,7 +172,12 @@ function App() {
 
   // Define the main layout
   const MainLayout = () => {
+    if (!user) {
+      return <Navigate to="/login" replace state={{ from: location }} />;
+    }
+
     const currentRouteInfo = PAGE_TITLES[location.pathname] || PAGE_TITLES["/dashboard"];
+    
     return (
       <div className="app-shell">
         {/* ---- SIDEBAR ---- */}
@@ -227,6 +283,42 @@ function App() {
               <button className="topbar-icon-btn" title="Theme Toggle" onClick={toggleTheme}>
                 <IconMoon />
               </button>
+              
+              <div className="notif-wrapper" ref={profileRef}>
+                <button 
+                  className="topbar-icon-btn profile-btn"
+                  onClick={() => setShowProfile(!showProfile)}
+                  style={{ borderRadius: "50%", padding: 0, overflow: "hidden", border: "2px solid var(--border)", width: "32px", height: "32px" }}
+                >
+                  <img 
+                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random`} 
+                    alt="Profile" 
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  />
+                </button>
+
+                {showProfile && (
+                  <div className="profile-dropdown">
+                    <div className="profile-dropdown-header">
+                      <img 
+                        src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random`}
+                        className="profile-dropdown-avatar" 
+                        alt="Avatar" 
+                      />
+                      <div className="profile-dropdown-info">
+                        <p className="profile-dropdown-name">{user.name}</p>
+                        <p className="profile-dropdown-email">{user.email}</p>
+                      </div>
+                    </div>
+                    <div className="profile-dropdown-body">
+                      <button className="profile-dropdown-item" onClick={() => setShowProfile(false)}>Edit Profile</button>
+                      <button className="profile-dropdown-item" onClick={() => setShowProfile(false)}>Settings</button>
+                      <button className="profile-dropdown-item logout" onClick={handleLogout}>Logout</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
             </div>
           </header>
 
@@ -251,6 +343,8 @@ function App() {
 
   return (
     <Routes>
+      <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/signup" element={user ? <Navigate to="/dashboard" replace /> : <Signup />} />
       <Route path="/*" element={<MainLayout />} />
     </Routes>
   );

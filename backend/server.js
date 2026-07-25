@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { randomUUID } = require("crypto");
+const { randomUUID, scryptSync, randomBytes, timingSafeEqual } = require("crypto");
 const sqlite3 = require("sqlite3").verbose();
 const path = require("path");
 const axios = require("axios");
@@ -66,6 +66,27 @@ db.serialize(() => {
       userFeedback TEXT,
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (scanResultId) REFERENCES scan_results(id)
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      passwordHash TEXT NOT NULL,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      token TEXT UNIQUE NOT NULL,
+      expiresAt DATETIME NOT NULL,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(id)
     )
   `);
 });
@@ -751,6 +772,122 @@ app.post("/api/feedback", (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// ==================== AUTHENTICATION API ====================
+
+const hashPassword = (password) => {
+  const salt = randomBytes(16).toString("hex");
+  const derivedKey = scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${derivedKey}`;
+};
+
+const verifyPassword = (password, hash) => {
+  const [salt, key] = hash.split(":");
+  const keyBuffer = Buffer.from(key, "hex");
+  const derivedKey = scryptSync(password, salt, 64);
+  return timingSafeEqual(keyBuffer, derivedKey);
+};
+
+app.post("/api/signup", (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    db.get("SELECT id FROM users WHERE email = ?", [email], (err, row) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (row) return res.status(409).json({ error: "Email already exists" });
+
+      const userId = randomUUID();
+      const passwordHash = hashPassword(password);
+
+      db.run(
+        "INSERT INTO users (id, name, email, passwordHash) VALUES (?, ?, ?, ?)",
+        [userId, name, email, passwordHash],
+        (err) => {
+          if (err) return res.status(500).json({ error: err.message });
+          res.status(201).json({ message: "User created successfully" });
+        }
+      );
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/login", (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "Missing email or password" });
+    }
+
+    db.get("SELECT * FROM users WHERE email = ?", [email], (err, user) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!user) return res.status(401).json({ error: "Invalid credentials" });
+
+      if (!verifyPassword(password, user.passwordHash)) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      const sessionId = randomUUID();
+      const token = randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
+
+      db.run(
+        "INSERT INTO sessions (id, userId, token, expiresAt) VALUES (?, ?, ?, ?)",
+        [sessionId, user.id, token, expiresAt],
+        (err) => {
+          if (err) return res.status(500).json({ error: err.message });
+          res.json({
+            token,
+            user: { id: user.id, name: user.name, email: user.email }
+          });
+        }
+      );
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/me", (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  const token = authHeader.split(" ")[1];
+
+  db.get(
+    `SELECT u.id, u.name, u.email, s.expiresAt FROM sessions s JOIN users u ON s.userId = u.id WHERE s.token = ?`,
+    [token],
+    (err, row) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!row) return res.status(401).json({ error: "Invalid session" });
+
+      if (new Date(row.expiresAt) < new Date()) {
+        db.run("DELETE FROM sessions WHERE token = ?", [token]);
+        return res.status(401).json({ error: "Session expired" });
+      }
+
+      res.json({ user: { id: row.id, name: row.name, email: row.email } });
+    }
+  );
+});
+
+app.post("/api/logout", (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(200).json({ message: "Logged out" });
+  }
+  const token = authHeader.split(" ")[1];
+
+  db.run("DELETE FROM sessions WHERE token = ?", [token], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: "Logged out successfully" });
+  });
 });
 
 app.listen(PORT, () => {
