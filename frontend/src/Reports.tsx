@@ -67,8 +67,19 @@ export default function Reports() {
     }, 1500);
   };
 
-  const handleDownload = (name: string) => {
-    alert(`Downloading ${name}...`);
+  const handleDownload = (name: string, type: string) => {
+    const content = type === 'CSV' 
+      ? "Report Name,Type,Status\\n" + name + "," + type + ",Processed"
+      : "Mock PDF Content for " + name;
+    const blob = new Blob([content], { type: type === 'CSV' ? 'text/csv' : 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${name.replace(/\\s+/g, '_')}.${type.toLowerCase()}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -127,7 +138,7 @@ export default function Reports() {
                   <td style={{ color: "var(--text-secondary)" }}>{report.size}</td>
                   <td className="table-date-cell">{report.date}</td>
                   <td style={{ textAlign: "right" }}>
-                    <button className="export-btn" onClick={() => handleDownload(report.name)}>
+                    <button className="export-btn download-btn" onClick={() => handleDownload(report.name, report.type)}>
                       <IconDownload /> Download
                     </button>
                   </td>

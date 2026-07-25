@@ -47,12 +47,24 @@ const NAV_ITEMS = [
   { path: "/settings", label: "Settings", icon: <IconSettings /> },
 ];
 
+import Login from "./Login";
+import Signup from "./Signup";
+
+// --- Protected Route Component ---
+function ProtectedRoute({ isAuthenticated, children }: { isAuthenticated: boolean; children: JSX.Element }) {
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
+
 function App() {
   const [state, setState] = useState<AppState | null>(null);
   const [loading, setLoading] = useState(true);
   const location = useLocation();
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
   const [showNotif, setShowNotif] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem("auth"));
   const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -62,6 +74,16 @@ function App() {
 
   const toggleTheme = () => {
     setTheme(prev => prev === "light" ? "dark" : "light");
+  };
+
+  const handleLogin = () => {
+    localStorage.setItem("auth", "true");
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("auth");
+    setIsAuthenticated(false);
   };
 
   useEffect(() => {
@@ -75,6 +97,7 @@ function App() {
   }, []);
 
   const fetchState = async () => {
+    if (!isAuthenticated) return;
     try {
       const latest = await requestJson<AppState>("/api/state");
       setState(latest);
@@ -97,10 +120,15 @@ function App() {
     };
     bootstrap();
     
-    // Polling is less necessary when using react-router but let's keep it for dashboard stats
-    const poll = window.setInterval(fetchState, 5000);
-    return () => { mounted = false; window.clearInterval(poll); };
-  }, []);
+    let poll: number | undefined;
+    if (isAuthenticated) {
+      poll = window.setInterval(fetchState, 5000);
+    }
+    return () => { 
+      mounted = false; 
+      if (poll) window.clearInterval(poll); 
+    };
+  }, [isAuthenticated]);
 
   if (loading) {
     return (
@@ -113,152 +141,156 @@ function App() {
     );
   }
 
-  if (!state && !loading) {
+  // Define the authenticated layout
+  const AuthenticatedLayout = () => {
+    const currentRouteInfo = PAGE_TITLES[location.pathname] || PAGE_TITLES["/dashboard"];
     return (
-      <div className="status-screen">
-        <div className="loading-box">
-          <IconAlertTriangle />
-          <p className="loading-text">No data from backend.</p>
+      <div className="app-shell">
+        {/* ---- SIDEBAR ---- */}
+        <aside className="sidebar">
+          <div className="sidebar-logo">
+            <div className="sidebar-logo-icon">
+              <IconShield />
+            </div>
+            <div className="sidebar-logo-text">
+              <span className="sidebar-logo-title">DarkTrace</span>
+              <span className="sidebar-logo-sub">Cybersecurity Intelligence</span>
+            </div>
+          </div>
+
+          <nav className="sidebar-nav">
+            {NAV_ITEMS.map((item, idx) => (
+              <div key={idx}>
+                <NavLink
+                  to={item.path}
+                  className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
+                >
+                  <span className="nav-icon">{item.icon}</span>
+                  {item.label}
+                </NavLink>
+              </div>
+            ))}
+          </nav>
+
+          <div className="sidebar-user" onClick={handleLogout} style={{ cursor: "pointer", borderTop: "1px solid var(--border)", paddingTop: "1rem", marginTop: "auto" }}>
+            <div className="user-avatar">J</div>
+            <div className="user-info">
+              <p className="user-name">John Admin</p>
+              <p className="user-role">Sign Out</p>
+            </div>
+          </div>
+        </aside>
+
+        {/* ---- MAIN AREA ---- */}
+        <div className="main-area">
+          <header className="topbar">
+            <div className="topbar-title-group">
+              <h1 className="topbar-title">{currentRouteInfo.title}</h1>
+              <p className="topbar-subtitle">{currentRouteInfo.subtitle}</p>
+            </div>
+
+            <div className="topbar-search">
+              <IconSearch />
+              <input placeholder="Search anything..." />
+            </div>
+
+            <div className="topbar-actions">
+              <div className="notif-wrapper" ref={notifRef}>
+                <button 
+                  className="topbar-icon-btn" 
+                  title="Notifications"
+                  onClick={() => setShowNotif(!showNotif)}
+                >
+                  <IconBell />
+                  {(state?.summary?.phishingDetected ?? 0) > 0 && <span className="notif-dot" />}
+                </button>
+                
+                {showNotif && (
+                  <div className="notif-dropdown">
+                    <div className="notif-header">
+                      <span className="notif-title">Notifications</span>
+                      <button className="notif-clear-btn" onClick={() => setShowNotif(false)}>Mark all as read</button>
+                    </div>
+                    <div className="notif-body">
+                      <div className="notif-item unread">
+                        <div className="notif-icon critical"><IconAlertTriangle /></div>
+                        <div className="notif-content">
+                          <p className="notif-heading">Threat detected</p>
+                          <p className="notif-desc">High risk phishing URL blocked</p>
+                          <p className="notif-time">2 mins ago</p>
+                        </div>
+                      </div>
+                      <div className="notif-item">
+                        <div className="notif-icon warning"><IconMail /></div>
+                        <div className="notif-content">
+                          <p className="notif-heading">Email flagged</p>
+                          <p className="notif-desc">Suspicious sender detected in inbox</p>
+                          <p className="notif-time">1 hour ago</p>
+                        </div>
+                      </div>
+                      <div className="notif-item">
+                        <div className="notif-icon success"><IconShield /></div>
+                        <div className="notif-content">
+                          <p className="notif-heading">Recent scan completed</p>
+                          <p className="notif-desc">System check finished with 0 errors</p>
+                          <p className="notif-time">3 hours ago</p>
+                        </div>
+                      </div>
+                      <div className="notif-item">
+                        <div className="notif-icon info"><IconBarChart /></div>
+                        <div className="notif-content">
+                          <p className="notif-heading">New report generated</p>
+                          <p className="notif-desc">Weekly security summary available</p>
+                          <p className="notif-time">Yesterday</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="notif-footer">
+                      <button className="notif-view-all">View all notifications</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <button className="topbar-icon-btn" title="Theme Toggle" onClick={toggleTheme}>
+                <IconMoon />
+              </button>
+              <div className="topbar-avatar" title="Sign Out" onClick={handleLogout} style={{ cursor: "pointer" }}>J</div>
+            </div>
+          </header>
+
+          <div className="page-content">
+            <Routes>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/url-scanner" element={<UrlScanner onStateUpdate={fetchState} />} />
+              <Route path="/email-scanner" element={<EmailScanner onStateUpdate={fetchState} />} />
+              <Route path="/history" element={<History />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/threat-intelligence" element={<ThreatIntelligence />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/extension" element={<ExtensionCenter />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </div>
         </div>
       </div>
     );
-  }
-
-  const currentRouteInfo = PAGE_TITLES[location.pathname] || PAGE_TITLES["/dashboard"];
+  };
 
   return (
-    <div className="app-shell">
-      {/* ---- SIDEBAR ---- */}
-      <aside className="sidebar">
-        <div className="sidebar-logo">
-          <div className="sidebar-logo-icon">
-            <IconShield />
-          </div>
-          <div className="sidebar-logo-text">
-            <span className="sidebar-logo-title">DarkTrace</span>
-            <span className="sidebar-logo-sub">Cybersecurity Intelligence</span>
-          </div>
-        </div>
-
-        <nav className="sidebar-nav">
-          {NAV_ITEMS.map((item, idx) => (
-            <div key={idx}>
-              <NavLink
-                to={item.path}
-                className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
-              >
-                <span className="nav-icon">{item.icon}</span>
-                {item.label}
-              </NavLink>
-            </div>
-          ))}
-        </nav>
-
-        <div className="sidebar-user">
-          <div className="user-avatar">J</div>
-          <div className="user-info">
-            <p className="user-name">John Admin</p>
-            <p className="user-role">Administrator</p>
-          </div>
-        </div>
-      </aside>
-
-      {/* ---- MAIN AREA ---- */}
-      <div className="main-area">
-        {/* Top Bar */}
-        <header className="topbar">
-          <div className="topbar-title-group">
-            <h1 className="topbar-title">{currentRouteInfo.title}</h1>
-            <p className="topbar-subtitle">{currentRouteInfo.subtitle}</p>
-          </div>
-
-          <div className="topbar-search">
-            <IconSearch />
-            <input placeholder="Search anything..." />
-          </div>
-
-          <div className="topbar-actions">
-            <div className="notif-wrapper" ref={notifRef}>
-              <button 
-                className="topbar-icon-btn" 
-                title="Notifications"
-                onClick={() => setShowNotif(!showNotif)}
-              >
-                <IconBell />
-                {(state?.summary?.phishingDetected ?? 0) > 0 && <span className="notif-dot" />}
-              </button>
-              
-              {showNotif && (
-                <div className="notif-dropdown">
-                  <div className="notif-header">
-                    <span className="notif-title">Notifications</span>
-                    <button className="notif-clear-btn" onClick={() => setShowNotif(false)}>Mark all as read</button>
-                  </div>
-                  <div className="notif-body">
-                    {/* Mock Notifications as requested */}
-                    <div className="notif-item unread">
-                      <div className="notif-icon critical"><IconAlertTriangle /></div>
-                      <div className="notif-content">
-                        <p className="notif-heading">Threat detected</p>
-                        <p className="notif-desc">High risk phishing URL blocked</p>
-                        <p className="notif-time">2 mins ago</p>
-                      </div>
-                    </div>
-                    <div className="notif-item">
-                      <div className="notif-icon warning"><IconMail /></div>
-                      <div className="notif-content">
-                        <p className="notif-heading">Email flagged</p>
-                        <p className="notif-desc">Suspicious sender detected in inbox</p>
-                        <p className="notif-time">1 hour ago</p>
-                      </div>
-                    </div>
-                    <div className="notif-item">
-                      <div className="notif-icon success"><IconShield /></div>
-                      <div className="notif-content">
-                        <p className="notif-heading">Recent scan completed</p>
-                        <p className="notif-desc">System check finished with 0 errors</p>
-                        <p className="notif-time">3 hours ago</p>
-                      </div>
-                    </div>
-                    <div className="notif-item">
-                      <div className="notif-icon info"><IconBarChart /></div>
-                      <div className="notif-content">
-                        <p className="notif-heading">New report generated</p>
-                        <p className="notif-desc">Weekly security summary available</p>
-                        <p className="notif-time">Yesterday</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="notif-footer">
-                    <button className="notif-view-all">View all notifications</button>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            <button className="topbar-icon-btn" title="Theme Toggle" onClick={toggleTheme}>
-              <IconMoon />
-            </button>
-            <div className="topbar-avatar" title="Profile">J</div>
-          </div>
-        </header>
-
-        {/* Page Content */}
-        <div className="page-content">
-          <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/url-scanner" element={<UrlScanner onStateUpdate={fetchState} />} />
-            <Route path="/email-scanner" element={<EmailScanner onStateUpdate={fetchState} />} />
-            <Route path="/history" element={<History />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/threat-intelligence" element={<ThreatIntelligence />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/extension" element={<ExtensionCenter />} />
-          </Routes>
-        </div>
-      </div>
-    </div>
+    <Routes>
+      <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login onLogin={handleLogin} />} />
+      <Route path="/signup" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Signup onLogin={handleLogin} />} />
+      <Route 
+        path="/*" 
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated}>
+            <AuthenticatedLayout />
+          </ProtectedRoute>
+        } 
+      />
+    </Routes>
   );
 }
 
