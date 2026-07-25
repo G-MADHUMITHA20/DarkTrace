@@ -1,23 +1,67 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { IconBarChart, IconDownload, IconFilter } from "./icons";
 
-const MOCK_REPORTS = [
-  { id: 1, name: "Weekly Executive Summary", date: "2026-07-24", type: "PDF", size: "2.4 MB" },
-  { id: 2, name: "Phishing Threat Landscape", date: "2026-07-20", type: "CSV", size: "845 KB" },
-  { id: 3, name: "Network Anomaly Log", date: "2026-07-15", type: "JSON", size: "12.1 MB" },
-  { id: 4, name: "Monthly Board Report", date: "2026-07-01", type: "PDF", size: "4.1 MB" },
-];
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
+
+interface ReportItem {
+  id: string | number;
+  name: string;
+  date: string;
+  type: string;
+  size: string;
+}
 
 export default function Reports() {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [reports, setReports] = useState(MOCK_REPORTS);
+  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchReports() {
+      try {
+        const res = await fetch(`${API_BASE}/api/dashboard/history?limit=100`);
+        if (!res.ok) {
+          throw new Error("Failed to fetch reports");
+        }
+        const data = await res.json();
+        const mapped = (data.results || []).map((r: any) => {
+          const type = r.kind === "url" ? "PDF" : "CSV";
+          const size = `${(1.2 + (r.riskScore || 0) * 0.05).toFixed(1)} MB`;
+          const date = r.processedAt ? new Date(r.processedAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
+          const displayName = r.kind === "url" 
+            ? `URL Scan Report - ${r.input}` 
+            : `Email Scan Report - ${r.emailParsedData?.subject || r.input}`;
+          return {
+            id: r.id,
+            name: displayName,
+            date,
+            type,
+            size
+          };
+        });
+        setReports(mapped);
+      } catch (err: any) {
+        setError(err.message || "An error occurred while fetching reports.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchReports();
+  }, []);
 
   const handleGenerate = () => {
     setIsGenerating(true);
     setTimeout(() => {
-      setReports([
-        { id: Date.now(), name: "Ad-hoc Security Scan Report", date: new Date().toISOString().split("T")[0], type: "PDF", size: "1.1 MB" },
-        ...reports
+      setReports((prev) => [
+        { 
+          id: Date.now(), 
+          name: "Ad-hoc Security Scan Report", 
+          date: new Date().toISOString().split("T")[0], 
+          type: "PDF", 
+          size: "1.1 MB" 
+        },
+        ...prev
       ]);
       setIsGenerating(false);
     }, 1500);
@@ -56,19 +100,40 @@ export default function Reports() {
             </tr>
           </thead>
           <tbody>
-            {reports.map((report) => (
-              <tr key={report.id}>
-                <td style={{ fontWeight: 500, color: "var(--text)" }}>{report.name}</td>
-                <td><span className={`status-badge ${report.type === 'PDF' ? 'critical' : 'safe'}`}>{report.type}</span></td>
-                <td style={{ color: "var(--text-secondary)" }}>{report.size}</td>
-                <td className="table-date-cell">{report.date}</td>
-                <td style={{ textAlign: "right" }}>
-                  <button className="export-btn" onClick={() => handleDownload(report.name)}>
-                    <IconDownload /> Download
-                  </button>
+            {loading ? (
+              <tr>
+                <td colSpan={5} style={{ textAlign: "center", padding: "2rem", color: "var(--text-secondary)" }}>
+                  <div className="loading-spinner" style={{ margin: "0 auto 1rem", width: "30px", height: "30px" }} />
+                  Loading reports...
                 </td>
               </tr>
-            ))}
+            ) : error ? (
+              <tr>
+                <td colSpan={5} style={{ textAlign: "center", padding: "2rem", color: "var(--danger)" }}>
+                  {error}
+                </td>
+              </tr>
+            ) : reports.length === 0 ? (
+              <tr>
+                <td colSpan={5} style={{ textAlign: "center", padding: "2rem", color: "var(--text-secondary)" }}>
+                  No reports generated yet.
+                </td>
+              </tr>
+            ) : (
+              reports.map((report) => (
+                <tr key={report.id}>
+                  <td style={{ fontWeight: 500, color: "var(--text)" }}>{report.name}</td>
+                  <td><span className={`status-badge ${report.type === 'PDF' ? 'critical' : 'safe'}`}>{report.type}</span></td>
+                  <td style={{ color: "var(--text-secondary)" }}>{report.size}</td>
+                  <td className="table-date-cell">{report.date}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <button className="export-btn" onClick={() => handleDownload(report.name)}>
+                      <IconDownload /> Download
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

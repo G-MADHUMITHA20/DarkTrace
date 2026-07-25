@@ -1966,6 +1966,17 @@
   padding: 0.6rem 0.75rem;
 }
 
+.result-explanation p {
+  font-size: 0.8rem;
+  color: var(--text);
+  line-height: 1.6;
+  margin: 0 0 0.5rem 0;
+}
+
+.result-explanation p:last-child {
+  margin-bottom: 0;
+}
+
 .result-explanation li {
   font-size: 0.8rem;
   color: var(--text-secondary);
