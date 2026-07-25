@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Routes, Route, NavLink, useLocation, Navigate } from "react-router-dom";
+import { Routes, Route, NavLink, useLocation, Navigate, useNavigate } from "react-router-dom";
 import type { AppState, BootstrapResponse } from "./types";
 import Dashboard from "./Dashboard";
 import ExtensionCenter from "./ExtensionCenter";
@@ -11,6 +11,7 @@ import ThreatIntelligence from "./ThreatIntelligence";
 import Settings from "./Settings";
 import Login from "./Login";
 import Signup from "./Signup";
+import Profile from "./Profile";
 import {
   IconShield, IconGlobe, IconMail, IconGrid,
   IconClock, IconAlertTriangle, IconBarChart,
@@ -54,6 +55,7 @@ const NAV_ITEMS = [
 ];
 
 function App() {
+  const navigate = useNavigate();
   const [state, setState] = useState<AppState | null>(null);
   const [loading, setLoading] = useState(true);
   const location = useLocation();
@@ -311,8 +313,10 @@ function App() {
                       </div>
                     </div>
                     <div className="profile-dropdown-body">
-                      <button className="profile-dropdown-item" onClick={() => setShowProfile(false)}>Edit Profile</button>
-                      <button className="profile-dropdown-item" onClick={() => setShowProfile(false)}>Settings</button>
+                      <button className="profile-dropdown-item" onClick={() => { setShowProfile(false); navigate("/profile"); }}>Profile</button>
+                      <button className="profile-dropdown-item" onClick={() => { setShowProfile(false); navigate("/profile"); }}>Edit Profile</button>
+                      <button className="profile-dropdown-item" onClick={() => { setShowProfile(false); navigate("/settings"); }}>Settings</button>
+                      <button className="profile-dropdown-item" onClick={() => { setShowProfile(false); navigate("/profile"); }}>Change Password</button>
                       <button className="profile-dropdown-item logout" onClick={handleLogout}>Logout</button>
                     </div>
                   </div>
@@ -332,6 +336,7 @@ function App() {
               <Route path="/reports" element={<Reports />} />
               <Route path="/threat-intelligence" element={<ThreatIntelligence />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/profile" element={<Profile />} />
               <Route path="/extension" element={<ExtensionCenter />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>

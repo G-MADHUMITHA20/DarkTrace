@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { IconShield } from "./icons";
+import { IconShield, IconGlobe, IconMail, IconAlertTriangle, IconBarChart } from "./icons";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -20,6 +20,16 @@ export default function Signup() {
     setError("");
     setSuccess("");
     
+    if (!name || !email || !password || !confirmPassword) {
+      setError("Please fill in all fields");
+      return;
+    }
+    
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters long");
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       return;
@@ -40,7 +50,7 @@ export default function Signup() {
         throw new Error(data.error || "Signup failed");
       }
 
-      setSuccess("Account created successfully. Please log in.");
+      setSuccess("Account created successfully. Redirecting to login...");
       setTimeout(() => {
         navigate("/login");
       }, 2000);
@@ -54,21 +64,52 @@ export default function Signup() {
   return (
     <div className="auth-container">
       <div className="auth-left">
-        <div className="auth-brand">
-          <div className="auth-logo-icon">
-            <IconShield />
+        <div className="auth-left-content">
+          <div className="auth-brand">
+            <IconShield /> DarkTrace
           </div>
-          <h1>DarkTrace</h1>
-          <p>Cybersecurity Intelligence</p>
+          
+          <div className="auth-feature-list">
+            <h1>Join the vanguard of cybersecurity.</h1>
+            <p>Create an account to access powerful threat detection tools and real-time intelligence feeds.</p>
+            
+            <div className="feature-item">
+              <IconShield /> AI Threat Detection
+            </div>
+            <div className="feature-item">
+              <IconGlobe /> URL Scanner
+            </div>
+            <div className="feature-item">
+              <IconMail /> Email Scanner
+            </div>
+            <div className="feature-item">
+              <IconAlertTriangle /> Threat Intelligence
+            </div>
+            <div className="feature-item">
+              <IconBarChart /> Secure Reports
+            </div>
+          </div>
         </div>
       </div>
+      
       <div className="auth-right">
         <div className="auth-card">
+          <div className="auth-brand-mobile">
+            <IconShield /> <h2>DarkTrace</h2>
+          </div>
           <h2>Create Account</h2>
           <p className="auth-subtitle">Join DarkTrace to secure your digital footprint</p>
           
-          {error && <div className="auth-error">{error}</div>}
-          {success && <div className="auth-success">{success}</div>}
+          {error && (
+            <div className="auth-error">
+              <IconAlertTriangle /> {error}
+            </div>
+          )}
+          {success && (
+            <div className="auth-success">
+              <IconShield /> {success}
+            </div>
+          )}
           
           <form onSubmit={handleSignup}>
             <div className="auth-field">
@@ -125,12 +166,12 @@ export default function Signup() {
             </div>
             
             <button type="submit" className="auth-submit" disabled={loading}>
-              {loading ? "Creating Account..." : "Create Account"}
+              {loading ? <div className="spinner" /> : "Create Account"}
             </button>
           </form>
           
           <div className="auth-footer">
-            Already have an account? <Link to="/login">Log in</Link>
+            Already have an account? <Link to="/login">Login</Link>
           </div>
         </div>
       </div>
